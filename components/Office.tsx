@@ -76,53 +76,28 @@ export default function Office() {
   const [plan, setPlan] = useState<ManagerPlan | null>(null);
   const [error, setError] = useState("");
 
-  const updateAgent = (id: string, patch: Partial<Agent>) =>
-    setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
+  const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
   const runProject = async () => {
     if (!prompt.trim() || running) return;
-
-    setRunning(true);
-    setError("");
-    setPlan(null);
-    setArtifact("");
-
-    setAgents((cur) => cur.map((x) => ({
-      ...x,
-      status: x.id === "manager" ? "working" : "idle",
-      progress: x.id === "manager" ? 10 : 0,
-      task: x.id === "manager" ? "Raka sedang menganalisis proyek..." : "Menunggu Manager"
-    })));
-
+    setRunning(true); setError(""); setPlan(null); setArtifact("");
+    setAgents((cur) => cur.map((x) => ({ ...x, status: x.id === "manager" ? "working" : "idle", progress: x.id === "manager" ? 10 : 0, task: x.id === "manager" ? "Raka sedang menganalisis proyek..." : "Menunggu Manager" })));
     try {
-      const res = await fetch("/api/manager", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: prompt.trim() })
-      });
+      const res = await fetch("/api/manager", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim() }) });
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || "Manager gagal membuat rencana.");
-
       setPlan(data.plan);
       updateAgent("manager", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
-
       const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
       const sequence: Array<"designer" | "writer" | "developer" | "qa"> = ["designer", "writer", "developer", "qa"];
-
       for (const id of sequence) {
         const task = byAgent.get(id);
         if (!task) continue;
-        setSelected(id);
-        updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 20, task: task.task });
-        await new Promise((r) => setTimeout(r, 700));
-        updateAgent(id, { progress: 65 });
-        await new Promise((r) => setTimeout(r, 700));
-        updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle" });
+        setSelected(id); updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 20, task: task.task });
+        await new Promise((r) => setTimeout(r, 700)); updateAgent(id, { progress: 65 });
+        await new Promise((r) => setTimeout(r, 700)); updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle" });
       }
-
-      setArtifact(
-        `PROJECT: ${prompt.trim()}
+      setArtifact(`PROJECT: ${prompt.trim()}
 
 MANAGER SUMMARY:
 ${data.plan.summary}
@@ -131,15 +106,12 @@ TASKS:
 ${data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => `- ${t.agent.toUpperCase()}: ${t.task}\n  Deliverable: ${t.deliverable}`).join("\n")}
 
 STATUS: PLAN READY FOR EXECUTION
-`
-      );
+`);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Terjadi error.";
       setError(message);
       setAgents((cur) => cur.map((x) => ({ ...x, status: "idle", task: x.id === "manager" ? "Gagal menjalankan proyek" : "Menunggu Manager" })));
-    } finally {
-      setRunning(false);
-    }
+    } finally { setRunning(false); }
   };
 
   const selectedAgent = agents.find((a) => a.id === selected)!;
@@ -150,49 +122,23 @@ STATUS: PLAN READY FOR EXECUTION
         <div className="hud"><div className="brand">AI OFFICE / LIVE AGENTS</div><div className="live"><i /> REAL AI MANAGER</div></div>
         <div className="canvas-wrap"><Canvas><color attach="background" args={["#0b1017"]} /><OfficeScene agents={agents} selected={selected} setSelected={setSelected} /></Canvas></div>
       </section>
-
       <aside className="panel">
         <h1>AI Office</h1>
         <div className="muted">Masukkan proyek. Raka akan membuat rencana kerja nyata untuk tim AI.</div>
-
         <div className="project">
           <div style={{ fontWeight: 700, fontSize: 13 }}>New project</div>
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Contoh: Buat landing page Nexora Design untuk UMKM Indonesia..." />
-          <button className="primary" onClick={runProject} disabled={!prompt.trim() || running}>
-            {running ? "Raka sedang bekerja..." : "START PROJECT"}
-          </button>
+          <button className="primary" onClick={runProject} disabled={!prompt.trim() || running}>{running ? "Raka sedang bekerja..." : "START PROJECT"}</button>
           {error && <div className="error-box">{error}</div>}
         </div>
-
-        <div className="agent-list">
-          {agents.map((a) => (
-            <div className="agent" key={a.id} onClick={() => setSelected(a.id)}>
-              <div className="agent-top"><div className="agent-name">{a.emoji} {a.name} · {a.role}</div><div className="badge">{a.status}</div></div>
-              <div className="task">{a.task}</div>
-              <div className="progress"><span style={{ width: `${a.progress}%` }} /></div>
-            </div>
-          ))}
-        </div>
-
-        {plan && (
-          <div className="artifact">
-            <div style={{ fontWeight: 700, fontSize: 13 }}>🧠 Raka — Manager Plan</div>
-            <div className="muted" style={{ marginTop: 6 }}>{plan.summary}</div>
-            {plan.tasks.map((t) => (
-              <div key={t.agent} style={{ marginTop: 10, fontSize: 12 }}>
-                <b>{t.agent.toUpperCase()}</b><br />
-                {t.task}<br />
-                <span className="muted">Deliverable: {t.deliverable}</span>
-              </div>
-            ))}
+        <div className="agent-list">{agents.map((a) => (
+          <div className="agent" key={a.id} onClick={() => setSelected(a.id)}>
+            <div className="agent-top"><div className="agent-name">{a.emoji} {a.name} · {a.role}</div><div className="badge">{a.status}</div></div>
+            <div className="task">{a.task}</div><div className="progress"><span style={{ width: `${a.progress}%` }} /></div>
           </div>
-        )}
-
-        <div className="artifact">
-          <div style={{ fontWeight: 700, fontSize: 13 }}>Selected agent</div>
-          <div className="muted" style={{ marginTop: 6 }}>{selectedAgent.name} · {selectedAgent.role} · {selectedAgent.task}</div>
-        </div>
-
+        ))}</div>
+        {plan && <div className="artifact"><div style={{ fontWeight: 700, fontSize: 13 }}>🧠 Raka — Manager Plan</div><div className="muted" style={{ marginTop: 6 }}>{plan.summary}</div>{plan.tasks.map((t) => <div key={t.agent} style={{ marginTop: 10, fontSize: 12 }}><b>{t.agent.toUpperCase()}</b><br />{t.task}<br /><span className="muted">Deliverable: {t.deliverable}</span></div>)}</div>}
+        <div className="artifact"><div style={{ fontWeight: 700, fontSize: 13 }}>Selected agent</div><div className="muted" style={{ marginTop: 6 }}>{selectedAgent.name} · {selectedAgent.role} · {selectedAgent.task}</div></div>
         {artifact && <div className="artifact"><div style={{ fontWeight: 700, fontSize: 13 }}>📦 Project artifact</div><pre>{artifact}</pre></div>}
       </aside>
     </main>
