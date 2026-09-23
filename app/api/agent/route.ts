@@ -46,7 +46,13 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.AI_API_KEY || "";
     const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
-    const model = process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
+    const modelByAgent: Record<AgentId, string> = {
+      designer: process.env.AI_MODEL_DESIGNER || "kr/claude-haiku-4.5",
+      developer: process.env.AI_MODEL_DEVELOPER || "kr/qwen3-coder-next",
+      writer: process.env.AI_MODEL_WRITER || "kr/glm-5",
+      qa: process.env.AI_MODEL_QA || "kr/deepseek-3.2"
+    };
+    const model = modelByAgent[agent] || process.env.AI_MODEL || "kr/claude-haiku-4.5";
 
     if (!baseUrl) {
       return NextResponse.json({ error: "AI_BASE_URL belum dipasang. Arahkan ke 9Router HTTPS yang dapat diakses Vercel; jangan gunakan 127.0.0.1/localhost." }, { status: 503 });
