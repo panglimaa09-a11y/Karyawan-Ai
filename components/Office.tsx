@@ -41,6 +41,13 @@ const initialAgents: Agent[] = [
   { id: "qa", name: "Bima", role: "QA", emoji: "🔍", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.2, .45, 1.1] }
 ];
 
+const loungePositions: Record<string, [number, number, number]> = {
+  designer: [-3.8, .45, 2.35],
+  developer: [-1.9, .45, 2.35],
+  writer: [1.9, .45, 2.35],
+  qa: [3.8, .45, 2.35]
+};
+
 function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolean; onClick: () => void }) {
   const ref = useMemo(() => new THREE.Group(), []);
   const avatarColor: Record<string, string> = {
@@ -51,19 +58,45 @@ function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolea
     qa: "#63b7ff"
   };
 
+  const lounge = loungePositions[agent.id] || agent.position;
+  const target = agent.id === "manager" || agent.status === "working" || agent.status === "review"
+    ? agent.position
+    : lounge;
+
   useFrame(({ clock }) => {
-    if (agent.status === "working" || agent.status === "review") {
-      ref.position.y = agent.position[1] + Math.sin(clock.elapsedTime * 3) * .025;
-    } else {
-      ref.position.y = agent.position[1];
+    const dx = target[0] - ref.position.x;
+    const dz = target[2] - ref.position.z;
+    const distance = Math.hypot(dx, dz);
+    const speed = agent.status === "working" || agent.status === "review" ? 0.075 : 0.055;
+
+    if (distance > 0.02) {
+      ref.position.x += dx * speed;
+      ref.position.z += dz * speed;
     }
+
+    const walking = distance > 0.16;
+    ref.position.y = agent.position[1] + (walking ? Math.sin(clock.elapsedTime * 10) * .035 : Math.sin(clock.elapsedTime * 2) * .008);
+    ref.rotation.y = Math.atan2(dx, dz);
+
+    (ref.userData as { initialized?: boolean }).initialized = true;
   });
+
+  const atDesk = Math.hypot(ref.position.x - agent.position[0], ref.position.z - agent.position[2]) < .22;
+  const walking = !atDesk && agent.id !== "manager";
 
   return (
     <group ref={ref} position={agent.position} onClick={(e) => { e.stopPropagation(); onClick(); }}>
-      <mesh>
+      <mesh position={[0, 0, 0]}>
         <boxGeometry args={[1.35, .14, .75]} />
         <meshStandardMaterial color={selected ? "#7ba7ff" : "#273243"} />
+      </mesh>
+      <mesh position={[0, .35, -.58]}>
+        <boxGeometry args={[.72, .08, .62]} />
+        <meshStandardMaterial color="#3b2f2a" />
+      </mesh>
+      <mesh position={[0, .18, -.78]}>
+        <boxGeometry args={[.72, .12, .55]} />
+        <meshStandardMaterial color="#2a3038" />
       </mesh>
       <mesh position={[0, .75, -.08]}>
         <boxGeometry args={[.62, .75, .12]} />
@@ -81,6 +114,8 @@ function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolea
         name={agent.name}
         role={agent.role}
         active={agent.status === "working" || agent.status === "review"}
+        seated={atDesk && !walking && agent.id !== "manager"}
+        talking={selected && (agent.status === "working" || agent.status === "review")}
       />
     </group>
   );
@@ -93,9 +128,9 @@ function OfficeScene({ agents, selected, setSelected }: { agents: Agent[]; selec
       <OrbitControls enablePan={false} minDistance={7} maxDistance={20} target={[0, 0, 0]} />
       <ambientLight intensity={2.2} /><directionalLight position={[4, 9, 4]} intensity={3} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -.05, 0]}><planeGeometry args={[11, 8]} /><meshStandardMaterial color="#b99572" /></mesh>
-      <mesh position={[0, 2.2, -4]}><boxGeometry args={[11, 4.5, .12]} /><meshStandardMaterial color="#e7e3dc" /></mesh>
-      <mesh position={[-5.45, 2.2, 0]}><boxGeometry args={[.12, 4.5, 8]} /><meshStandardMaterial color="#e7e3dc" /></mesh>
-      <mesh position={[5.45, 2.2, 0]}><boxGeometry args={[.12, 4.5, 8]} /><meshStandardMaterial color="#e7e3dc" /></mesh>
+      <mesh position={[0, 1.45, -4]}><boxGeometry args={[11, 2.8, .12]} /><meshStandardMaterial color="#6f6258" /></mesh>
+      <mesh position={[-5.45, 1.45, 0]}><boxGeometry args={[.12, 2.8, 8]} /><meshStandardMaterial color="#65584f" /></mesh>
+      <mesh position={[5.45, 1.45, 0]}><boxGeometry args={[.12, 2.8, 8]} /><meshStandardMaterial color="#65584f" /></mesh>
       <mesh position={[0, .8, 3]}><boxGeometry args={[3.2, .16, 1.1]} /><meshStandardMaterial color="#563f32" /></mesh>
       <Text position={[0, .95, 3]} rotation={[-Math.PI / 2, 0, 0]} fontSize={.24} color="#ded0c2" anchorX="center">MEETING</Text>
       {agents.map((a) => <Employee key={a.id} agent={a} selected={selected === a.id} onClick={() => setSelected(a.id)} />)}
