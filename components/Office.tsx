@@ -18,7 +18,9 @@ type Agent = {
 };
 
 type ProjectHistory = { project: string; time: string; status: string };
-type SavedProject = { project: string; history: ProjectHistory[]; plan: ManagerPlan | null; artifacts: Artifact[]; artifact: string; aiModel: string; tokenUsage: TokenUsage };
+type ResourceRequest = { id: string; from: string; request: string; reason: string; status: "pending" | "provided"; value?: string };
+type DeliveryConfig = { repoUrl: string; branch: string; };
+type SavedProject = { project: string; history: ProjectHistory[]; plan: ManagerPlan | null; artifacts: Artifact[]; artifact: string; aiModel: string; tokenUsage: TokenUsage; requests: ResourceRequest[]; delivery: DeliveryConfig };
 type TokenUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
 type Artifact = { agent: "designer" | "developer" | "writer" | "qa"; title: string; content: string; model?: string; usage?: TokenUsage; status: "working" | "done" | "error" };
 
@@ -109,7 +111,9 @@ export default function Office() {
   const [artifact, setArtifact] = useState("");
   const [plan, setPlan] = useState<ManagerPlan | null>(null);
   const [error, setError] = useState("");
-  const [sidebar, setSidebar] = useState<"history" | "tokens" | "ai" | null>(null);
+  const [sidebar, setSidebar] = useState<"history" | "tokens" | "ai" | "requests" | "delivery" | null>(null);
+  const [requests, setRequests] = useState<ResourceRequest[]>([]);
+  const [delivery, setDelivery] = useState<DeliveryConfig>({ repoUrl: "", branch: "main" });
   const [history, setHistory] = useState<ProjectHistory[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(null);
   const [aiModel, setAiModel] = useState("Atria-Dawn-Preview");
@@ -129,6 +133,8 @@ export default function Office() {
       setArtifact(data.artifact || "");
       setAiModel(data.aiModel || "Atria-Dawn-Preview");
       setTokenUsage(data.tokenUsage || null);
+      setRequests(data.requests || []);
+      setDelivery(data.delivery || { repoUrl: "", branch: "main" });
       if (data.artifacts?.length) setWorkspaceOpen(true);
     } catch {
       localStorage.removeItem("ai-office-project");
@@ -137,9 +143,9 @@ export default function Office() {
 
   useEffect(() => {
     if (!prompt.trim() && !history.length && !artifacts.length) return;
-    const saved: SavedProject = { project: prompt.trim(), history, plan, artifacts, artifact, aiModel, tokenUsage };
+    const saved: SavedProject = { project: prompt.trim(), history, plan, artifacts, artifact, aiModel, tokenUsage, requests, delivery };
     localStorage.setItem("ai-office-project", JSON.stringify(saved));
-  }, [prompt, history, plan, artifacts, artifact, aiModel, tokenUsage]);
+  }, [prompt, history, plan, artifacts, artifact, aiModel, tokenUsage, requests, delivery]);
 
   const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
@@ -220,6 +226,34 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
       <div className="ai-card"><div className="ai-dot" /><div><b>{aiModel}</b><span>Project Manager · Raka</span></div></div>
       <div className="side-empty">Model produksi ditentukan oleh konfigurasi server.</div>
     </>
+  ) : sidebar === "requests" ? (
+    <>
+      <div className="side-title">Permintaan AI ke Bos</div>
+      {requests.length ? requests.map((r) => (
+        <div className="side-item" key={r.id}>
+          <b>🤖 {r.from}</b>
+          <span>{r.request}</span>
+          <small>{r.reason}</small>
+          <button className="side-action" onClick={() => setRequests(items => items.map(x => x.id === r.id ? { ...x, status: "provided" } : x))}>
+            {r.status === "provided" ? "✓ Sudah diberikan" : "Tandai sudah diberikan"}
+          </button>
+        </div>
+      )) : <div className="side-empty">Belum ada permintaan resource. Jika AI membutuhkan API key, repo, file, domain, atau konfigurasi, permintaannya akan muncul di sini.</div>}
+      <div className="side-warning">Jangan masukkan secret/API key langsung ke chat. Simpan credential sebagai environment variable/secret di server.</div>
+    </>
+  ) : sidebar === "delivery" ? (
+    <>
+      <div className="side-title">Delivery Project</div>
+      <label className="field-label">GitHub Repository</label>
+      <input className="side-input" value={delivery.repoUrl} onChange={e => setDelivery(d => ({ ...d, repoUrl: e.target.value }))} placeholder="https://github.com/user/repo" />
+      <label className="field-label">Branch</label>
+      <input className="side-input" value={delivery.branch} onChange={e => setDelivery(d => ({ ...d, branch: e.target.value }))} placeholder="main" />
+      <div className="side-item">
+        <b>📦 Output</b>
+        <span>Artifact Developer saat ini masih berupa hasil kode/text. Tahap berikutnya kita ubah menjadi file tree → ZIP → repository.</span>
+      </div>
+      <button className="primary" onClick={() => setWorkspaceOpen(true)}>Buka Workspace →</button>
+    </>
   );
 
   return (
@@ -229,6 +263,8 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
         <button className={sidebar === "history" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "history" ? null : "history")}><span>◷</span>Riwayat Projek</button>
         <button className={sidebar === "tokens" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "tokens" ? null : "tokens")}><span>⌁</span>Penggunaan Token</button>
         <button className={sidebar === "ai" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "ai" ? null : "ai")}><span>✦</span>AI yang Dipakai</button>
+        <button className={sidebar === "requests" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "requests" ? null : "requests")}><span>⚡</span>Permintaan AI</button>
+        <button className={sidebar === "delivery" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "delivery" ? null : "delivery")}><span>📦</span>Delivery / Repo</button>
       </nav>
       {sidebar && <aside className="sidebar-drawer"><button className="drawer-close" onClick={() => setSidebar(null)}>×</button>{sidebarContent}</aside>}
       <section className="scene">
