@@ -111,7 +111,7 @@ export default function Office() {
   const [artifact, setArtifact] = useState("");
   const [plan, setPlan] = useState<ManagerPlan | null>(null);
   const [error, setError] = useState("");
-  const [sidebar, setSidebar] = useState<"history" | "tokens" | "ai" | "requests" | "delivery" | null>(null);
+  const [sidebar, setSidebar] = useState<"history" | "tokens" | "ai" | "requests" | "delivery" | "workspace" | null>(null);
   const [requests, setRequests] = useState<ResourceRequest[]>([]);
   const [delivery, setDelivery] = useState<DeliveryConfig>({ repoUrl: "", branch: "main" });
   const [history, setHistory] = useState<ProjectHistory[]>([]);
@@ -135,7 +135,7 @@ export default function Office() {
       setTokenUsage(data.tokenUsage || null);
       setRequests(data.requests || []);
       setDelivery(data.delivery || { repoUrl: "", branch: "main" });
-      if (data.artifacts?.length) setWorkspaceOpen(true);
+      if (data.artifacts?.length) { setWorkspaceOpen(true); setSidebar("workspace"); }
     } catch {
       localStorage.removeItem("ai-office-project");
     }
@@ -151,7 +151,7 @@ export default function Office() {
 
   const runProject = async () => {
     if (!prompt.trim() || running) return;
-    setRunning(true); setError(""); setPlan(null); setArtifact(""); setArtifacts([]); setWorkspaceOpen(true); setWorkspaceTab("overview");
+    setRunning(true); setError(""); setPlan(null); setArtifact(""); setArtifacts([]); setWorkspaceOpen(true); setSidebar("workspace"); setWorkspaceTab("overview");
     setAgents((cur) => cur.map((x) => ({ ...x, status: x.id === "manager" ? "working" : "idle", progress: x.id === "manager" ? 10 : 0, task: x.id === "manager" ? "Raka sedang menganalisis proyek..." : "Menunggu Manager" })));
     try {
       const res = await fetch("/api/manager", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim() }) });
@@ -244,6 +244,22 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
       )) : <div className="side-empty">Belum ada permintaan resource. Jika AI membutuhkan API key, repo, file, domain, atau konfigurasi, permintaannya akan muncul di sini.</div>}
       <div className="side-warning">Jangan masukkan secret/API key langsung ke chat. Simpan credential sebagai environment variable/secret di server.</div>
     </>
+  ) : sidebar === "workspace" ? (
+    <>
+      <div className="workspace-head"><div><div className="workspace-kicker">PROJECT WORKSPACE</div><h2>{prompt.trim() || "Project"}</h2><span>{running ? "AI employees sedang bekerja..." : "Workflow selesai — hasil siap ditinjau"}</span></div></div>
+      <nav className="workspace-tabs">
+        <button className={workspaceTab === "overview" ? "active" : ""} onClick={() => setWorkspaceTab("overview")}>Overview</button>
+        <button className={workspaceTab === "artifacts" ? "active" : ""} onClick={() => setWorkspaceTab("artifacts")}>Artifacts ({artifacts.filter(a => a.status === "done").length})</button>
+        <button className={workspaceTab === "preview" ? "active" : ""} onClick={() => setWorkspaceTab("preview")}>Preview</button>
+        <button className={workspaceTab === "activity" ? "active" : ""} onClick={() => setWorkspaceTab("activity")}>Activity</button>
+      </nav>
+      <div className="workspace-body">
+        {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
+        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3><pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre></article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
+        {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI WORK RESULT</span><span>{running ? "BUILDING" : "READY"}</span></div><pre>{artifact || "Preview akan tersedia setelah workflow berjalan."}</pre></div>}
+        {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
+      </div>
+    </>
   ) : sidebar === "delivery" ? (
     <>
       <div className="side-title">Delivery Project</div>
@@ -255,7 +271,7 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
         <b>📦 Output</b>
         <span>Artifact Developer saat ini masih berupa hasil kode/text. Tahap berikutnya kita ubah menjadi file tree → ZIP → repository.</span>
       </div>
-      <button className="primary" onClick={() => setWorkspaceOpen(true)}>Buka Workspace →</button>
+      <button className="primary" onClick={() => { setWorkspaceOpen(true); setSidebar("workspace"); }}>Buka Workspace →</button>
     </>
   ) : null;
 
@@ -268,31 +284,13 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
         <button className={sidebar === "ai" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "ai" ? null : "ai")}><span>✦</span>AI yang Dipakai</button>
         <button className={sidebar === "requests" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "requests" ? null : "requests")}><span>⚡</span>Permintaan AI</button>
         <button className={sidebar === "delivery" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "delivery" ? null : "delivery")}><span>📦</span>Delivery / Repo</button>
+        <button className={sidebar === "workspace" ? "side-btn active" : "side-btn"} onClick={() => { setWorkspaceOpen(true); setSidebar(sidebar === "workspace" ? null : "workspace"); }}><span>🗂️</span>Project Workspace</button>
       </nav>
       {sidebar && <aside className="sidebar-drawer"><button className="drawer-close" onClick={() => setSidebar(null)}>×</button>{sidebarContent}</aside>}
       <section className="scene">
         <div className="hud"><div className="brand">AI OFFICE / LIVE AGENTS</div><div className="live"><i /> REAL AI MANAGER</div></div>
         <div className="canvas-wrap"><Canvas><color attach="background" args={["#0b1017"]} /><OfficeScene agents={agents} selected={selected} setSelected={setSelected} /></Canvas></div>
       </section>
-      {workspaceOpen && (
-        <div className="workspace-overlay">
-          <section className="workspace">
-            <header className="workspace-head"><div><div className="workspace-kicker">PROJECT WORKSPACE</div><h2>{prompt.trim() || "Project"}</h2><span>{running ? "AI employees sedang bekerja..." : "Workflow selesai — hasil siap ditinjau"}</span></div><button className="workspace-close" onClick={() => setWorkspaceOpen(false)}>×</button></header>
-            <nav className="workspace-tabs">
-              <button className={workspaceTab === "overview" ? "active" : ""} onClick={() => setWorkspaceTab("overview")}>Overview</button>
-              <button className={workspaceTab === "artifacts" ? "active" : ""} onClick={() => setWorkspaceTab("artifacts")}>Artifacts ({artifacts.filter(a => a.status === "done").length})</button>
-              <button className={workspaceTab === "preview" ? "active" : ""} onClick={() => setWorkspaceTab("preview")}>Preview</button>
-              <button className={workspaceTab === "activity" ? "active" : ""} onClick={() => setWorkspaceTab("activity")}>Activity</button>
-            </nav>
-            <div className="workspace-body">
-              {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
-              {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3><pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre></article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
-              {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI WORK RESULT</span><span>{running ? "BUILDING" : "READY"}</span></div><pre>{artifact || "Preview akan tersedia setelah workflow berjalan."}</pre></div>}
-              {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
-            </div>
-          </section>
-        </div>
-      )}
       <aside className="panel">
         <h1>AI Office</h1>
         <div className="muted">Masukkan proyek. Raka akan membuat rencana kerja nyata untuk tim AI.</div>
