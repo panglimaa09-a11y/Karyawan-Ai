@@ -488,16 +488,14 @@ ${js}
       <div className="side-empty">{modelLoading ? "Mengambil daftar model dari 9Router..." : availableModels.length ? `${availableModels.length} model tersedia dari 9Router.` : (modelError || "Belum ada model.")}</div>
       {agents.map((a) => (
         <label className="field-label" key={a.id}>{a.emoji} {a.name} · {a.role}
-          <select className="side-input" value={modelConfig[a.id] || ""} onChange={(e) => setModelConfig((x) => ({ ...x, [a.id]: e.target.value }))} disabled={!availableModels.length || a.id === "manager"}>
+          <select className="side-input" value={modelConfig[a.id] || ""} onChange={(e) => setModelConfig((x) => ({ ...x, [a.id]: e.target.value }))} disabled={!availableModels.length}>
             <option value="">Pilih model</option>
             {availableModels.map((model) => <option value={model} key={model}>{model}</option>)}
           </select>
         </label>
-      ))
-        <label className="field-label" key={id}>{name} · {role}
-
-      <button className="primary" onClick={() => localStorage.setItem("ai-office-model-config", JSON.stringify(modelConfig))}>Simpan konfigurasi model</button>
-      <div className="side-warning">Daftar model dibaca langsung dari endpoint /v1/models milik 9Router. Nama model yang muncul mengikuti model yang benar-benar tersedia di gateway kamu.</div>
+      ))}
+      <button className="primary" onClick={() => localStorage.setItem("ai-office-model-config", JSON.stringify(modelConfig))}>Simpan konfigurasi semua model</button>
+      <div className="side-warning">Setiap karyawan dapat memakai model berbeda. Konfigurasi disimpan di browser.</div>
     </>
   ) : sidebar === "requests" ? (
     <>
