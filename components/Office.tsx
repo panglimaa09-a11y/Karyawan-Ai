@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, Text } from "@react-three/drei";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import EmployeeAvatar from "./EmployeeAvatar";
 
@@ -18,6 +18,7 @@ type Agent = {
 };
 
 type ProjectHistory = { project: string; time: string; status: string };
+type SavedProject = { project: string; history: ProjectHistory[]; plan: ManagerPlan | null; artifacts: Artifact[]; artifact: string; aiModel: string; tokenUsage: TokenUsage };
 type TokenUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
 type Artifact = { agent: "designer" | "developer" | "writer" | "qa"; title: string; content: string; model?: string; usage?: TokenUsage; status: "working" | "done" | "error" };
 
@@ -115,6 +116,30 @@ export default function Office() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "artifacts" | "preview" | "activity">("overview");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ai-office-project");
+      if (!saved) return;
+      const data: SavedProject = JSON.parse(saved);
+      setPrompt(data.project || "");
+      setHistory(data.history || []);
+      setPlan(data.plan || null);
+      setArtifacts(data.artifacts || []);
+      setArtifact(data.artifact || "");
+      setAiModel(data.aiModel || "Atria-Dawn-Preview");
+      setTokenUsage(data.tokenUsage || null);
+      if (data.artifacts?.length) setWorkspaceOpen(true);
+    } catch {
+      localStorage.removeItem("ai-office-project");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!prompt.trim() && !history.length && !artifacts.length) return;
+    const saved: SavedProject = { project: prompt.trim(), history, plan, artifacts, artifact, aiModel, tokenUsage };
+    localStorage.setItem("ai-office-project", JSON.stringify(saved));
+  }, [prompt, history, plan, artifacts, artifact, aiModel, tokenUsage]);
 
   const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
