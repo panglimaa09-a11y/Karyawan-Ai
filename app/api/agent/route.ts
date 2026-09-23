@@ -44,13 +44,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Project, agent, dan task wajib diisi." }, { status: 400 });
     }
 
-    const apiKey = process.env.AI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "AI_API_KEY belum dipasang di server." }, { status: 500 });
-    }
+    const apiKey = process.env.AI_API_KEY || "";
+    const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
+    const model = process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
 
-    const baseUrl = (process.env.AI_BASE_URL || "https://api.atria-asi.ai/v1").replace(/\/$/, "");
-    const model = process.env.AI_MODEL || "Atria-Dawn-Preview";
+    if (!baseUrl) {
+      return NextResponse.json({ error: "AI_BASE_URL belum dipasang. Arahkan ke 9Router HTTPS yang dapat diakses Vercel; jangan gunakan 127.0.0.1/localhost." }, { status: 503 });
+    }
     const configuredTimeoutMs = Number(process.env.AI_TIMEOUT_MS || 30000);
     const timeoutMs = Math.min(30000, Math.max(10000, configuredTimeoutMs));
     const maxRetries = Math.min(1, Math.max(0, Number(process.env.AI_MAX_RETRIES || 0)));
@@ -112,7 +112,7 @@ ${context}
           return NextResponse.json({ error: lastError, status: response.status, agent }, { status: response.status });
         }
       } catch (err) {
-        lastError = err instanceof Error && err.name === "AbortError" ? "Provider AI timeout setelah 90 detik." : err instanceof Error ? err.message : "Koneksi ke provider AI gagal.";
+        lastError = err instanceof Error && err.name === "AbortError" ? "Provider 9Router timeout." : err instanceof Error ? err.message : "Koneksi ke provider AI gagal.";
         if (attempt === maxRetries) {
           return NextResponse.json({ error: lastError, agent }, { status: 502 });
         }
