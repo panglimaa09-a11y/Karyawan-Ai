@@ -369,16 +369,16 @@ Buat hasil baru yang lebih ringkas dan valid.`;
   useEffect(() => {
     if (!projectFiles.length) { setPreviewHtml(""); return; }
     const byPath = new Map(projectFiles.map((f) => [f.path.replace(/^\.\//, ""), f.content]));
-    const htmlFile = byPath.get("index.html") || projectFiles.find((f) => /\\.html$/i.test(f.path))?.content;
+    const htmlFile = byPath.get("index.html") || projectFiles.find((f) => /\.html$/i.test(f.path))?.content;
     if (!htmlFile) { setPreviewHtml(""); return; }
     let html = htmlFile;
     html = html.replace(/<link[^>]+href=["']([^"']+)["'][^>]*>/gi, (tag, href) => {
       const css = byPath.get(String(href).replace(/^\.\//, ""));
-      return css != null ? \`<style>\\n${css}\\n</style>\` : tag;
+      return css != null ? `<style>\n${css}\n</style>` : tag;
     });
     html = html.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\\/script>/gi, (tag, src) => {
       const js = byPath.get(String(src).replace(/^\.\//, ""));
-      return js != null ? \`<script>\\n${js}\\n<\\/script>\` : tag;
+      return js != null ? `<script>\n${js}\n</script>` : tag;
     });
     setPreviewHtml(html);
   }, [developerArtifact]);
