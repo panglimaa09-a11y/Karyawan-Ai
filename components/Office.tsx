@@ -299,21 +299,15 @@ export default function Office() {
       const developerResult = resultByAgent.get("developer");
       const designerResult = resultByAgent.get("designer");
       const writerResult = resultByAgent.get("writer");
-      const developerFiles = developerResult?.files?.map((f: ProjectFile) => `FILE: ${f.path}
-${f.content}`).join("
-
-") || developerResult?.artifact || "Belum tersedia.";
+      const developerFiles = developerResult?.files?.map((f: ProjectFile) => `FILE: ${f.path}\n${f.content}`).join("\n\n") || developerResult?.artifact || "Belum tersedia.";
       const contextForQa = [
         "SINTA DESIGN:",
         designerResult?.artifact || "Belum tersedia.",
-        "
-DINA COPY:",
+        "\nDINA COPY:",
         writerResult?.artifact || "Belum tersedia.",
-        "
-ANDI PROJECT FILES:",
+        "\nANDI PROJECT FILES:",
         developerFiles
-      ].join("
-");
+      ].join("\n");
       await runEmployee("qa", contextForQa);
 
       setWorkspaceTab("artifacts");
