@@ -171,6 +171,8 @@ ${context}
       agent,
       model: data?.model || model,
       artifact: normalizedArtifact,
+      files: parsedProject?.files || null,
+      summary: parsedProject?.summary || null,
       usage: data?.usage || null,
       requests
     });
