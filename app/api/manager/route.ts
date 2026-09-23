@@ -13,6 +13,63 @@ type Plan = {
   }>;
 };
 
+function extractJsonObject(raw: string): string {
+  const cleaned = raw.replace(/^\\s*\\```(?:json)?\\s*/i, "").replace(/\\s*\\`\\`\\`\\s*$/i, "").trim();
+  const start = cleaned.indexOf("{");
+  if (start < 0) throw new Error("Manager returned no JSON object.");
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === quote) quote = "";
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "{") depth++;
+    if (ch === "}") {
+      depth--;
+      if (depth === 0) return cleaned.slice(start, i + 1);
+    }
+  }
+  throw new Error("Manager returned incomplete JSON.");
+}
+
+function parseManagerPlan(raw: string): Plan {
+  const candidate = extractJsonObject(raw);
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    // Some compatible models return JavaScript-style object literals
+    // (single-quoted strings or unquoted property names) despite the prompt.
+    const normalized = candidate
+      .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_m, value) => JSON.stringify(String(value).replace(/\\'/g, "'")))
+      .replace(/([{,]\\s*)([A-Za-z_$][\\w$-]*)\\s*:/g, '$1"$2":');
+    return JSON.parse(normalized);
+  }
+}
+
+port { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
+
+type Plan = {
+  summary: string;
+  tasks: Array<{
+    agent: "designer" | "developer" | "writer" | "qa";
+    task: string;
+    deliverable: string;
+  }>;
+};
+
 function extractText(data: any): string {
   if (typeof data?.output_text === "string") return data.output_text;
 
@@ -92,15 +149,8 @@ export async function POST(request: Request) {
     }
 
     const raw = extractText(data).trim();
-    let plan: Plan;
-
-    try {
-      plan = JSON.parse(raw);
-    } catch {
-      const fenced = raw.match(/\{[\s\S]*\}/);
-      if (!fenced) throw new Error("Manager returned invalid JSON.");
-      plan = JSON.parse(fenced[0]);
-    }
+    if (!raw) throw new Error("Manager returned an empty response.");
+    const plan = parseManagerPlan(raw);
 
     const allowed = new Set(["designer", "developer", "writer", "qa"]);
     plan.tasks = Array.isArray(plan.tasks)
