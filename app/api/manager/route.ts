@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     // 9Router configuration. AI_BASE_URL must point to a reachable HTTPS 9Router OpenAI-compatible gateway.
     const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
     const apiKey = process.env.AI_API_KEY || "";
-    const model = process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
+    const model = process.env.AI_MODEL_RAKA || process.env.AI_MODEL || "kr/claude-sonnet-4.5";
     const timeoutMs = Math.max(15000, Number(process.env.AI_TIMEOUT_MS || 45000));
 
     if (!baseUrl) {
