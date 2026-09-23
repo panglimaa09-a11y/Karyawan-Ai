@@ -110,6 +110,7 @@ export default function Office() {
   const [sidebar, setSidebar] = useState<"history" | "tokens" | "ai" | null>(null);
   const [history, setHistory] = useState<ProjectHistory[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(null);
+  const [aiModel, setAiModel] = useState("Atria-Dawn-Preview");
 
   const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
@@ -123,6 +124,7 @@ export default function Office() {
       if (!res.ok) throw new Error(data.error || "Manager gagal membuat rencana.");
       setPlan(data.plan);
       setTokenUsage(data.usage || null);
+      setAiModel(data.model || "Atria-Dawn-Preview");
       setHistory((items) => [
         { project: prompt.trim(), time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), status: "Selesai" },
         ...items
@@ -177,7 +179,7 @@ STATUS: PLAN READY FOR EXECUTION
   ) : (
     <>
       <div className="side-title">AI yang Dipakai</div>
-      <div className="ai-card"><div className="ai-dot" /><div><b>{process.env.NEXT_PUBLIC_AI_MODEL || "Atria-Dawn-Preview"}</b><span>Project Manager · Raka</span></div></div>
+      <div className="ai-card"><div className="ai-dot" /><div><b>{aiModel}</b><span>Project Manager · Raka</span></div></div>
       <div className="side-empty">Model produksi ditentukan oleh konfigurasi server.</div>
     </>
   );
