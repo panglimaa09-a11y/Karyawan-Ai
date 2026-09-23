@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const agent = String(body?.agent || "") as AgentId;
     const task = String(body?.task || "").trim();
     const deliverable = String(body?.deliverable || "").trim();
-    const context = String(body?.context || "").trim().slice(0, 14000);
+    const context = String(body?.context || "").trim().slice(0, 14000);\n    const requestedModel = String(body?.model || "").trim();
 
     if (!project || !prompts[agent] || !task) {
       return NextResponse.json({ error: "Project, agent, dan task wajib diisi." }, { status: 400 });
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       writer: process.env.AI_MODEL_WRITER || "kr/glm-5",
       qa: process.env.AI_MODEL_QA || "kr/deepseek-3.2"
     };
-    const model = modelByAgent[agent] || process.env.AI_MODEL || "kr/claude-haiku-4.5";
+    const model = requestedModel || modelByAgent[agent] || process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
 
     if (!baseUrl) {
       return NextResponse.json({ error: "AI_BASE_URL belum dipasang. Arahkan ke 9Router HTTPS yang dapat diakses Vercel; jangan gunakan 127.0.0.1/localhost." }, { status: 503 });
