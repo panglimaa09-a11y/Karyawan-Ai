@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       throw new Error("Manager plan is incomplete.");
     }
 
-    return NextResponse.json({ plan, model });
+    return NextResponse.json({ plan, model, usage: data?.usage || null });
   } catch (error) {
     console.error("manager route error", error);
     return NextResponse.json(
