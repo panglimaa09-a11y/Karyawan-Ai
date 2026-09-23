@@ -177,6 +177,9 @@ export default function Office() {
           const agentRes = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable }) });
           const agentData = await agentRes.json();
           if (!agentRes.ok) throw new Error(agentData.error || `${id} gagal mengerjakan task.`);
+          if (Array.isArray(agentData.requests) && agentData.requests.length) {
+            setRequests((items) => [...items, ...agentData.requests].slice(-20));
+          }
           setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: agentData.artifact || "Agent tidak mengembalikan artifact.", model: agentData.model, usage: agentData.usage, status: "done" } : a));
           updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: "Artifact selesai" });
         } catch (agentError) {
