@@ -3,13 +3,30 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-type AgentId = "designer" | "developer" | "writer" | "qa";
+type AgentId = string;
 
-const prompts: Record<AgentId, string> = {
-  designer: "Kamu adalah Sinta, AI UI/UX Designer. Buat design specification yang konkret: visual direction, layout sections, components, responsive behavior, colors, typography, and acceptance criteria. Jangan hanya memberi saran umum.",
-  developer: "Kamu adalah Andi, AI Developer. Hasilkan project nyata sebagai JSON VALID SAJA dengan shape {files:[{path:string,content:string}],summary:string,resource_requests:[{request:string,reason:string}]}. Setiap file harus berisi kode lengkap yang bisa dipakai. Jangan gunakan markdown fence. Fokus pada file inti agar output tetap ringkas. Jika membutuhkan API key, repo, env, file, atau domain, masukkan ke resource_requests; jangan meminta secret lewat chat.",
-  writer: "Kamu adalah Dina, AI Writer. Hasilkan copywriting nyata yang siap dipakai: headline, subheadline, CTA, section copy, feature descriptions, FAQ bila relevan. Gunakan bahasa yang sesuai permintaan project.",
-  qa: "Kamu adalah Bima, AI QA Engineer. Review artifact dan file project yang diberikan. Buat QA report ringkas dan konkret: status PASS/FAIL, test cases, bug/risiko, acceptance checklist, dan perbaikan yang diperlukan. Jangan mengklaim menjalankan aplikasi jika hanya membaca kode."
+const prompts: Record<string, string> = {
+  analyst: "Kamu Ardi, Business Analyst. Pecah kebutuhan user menjadi requirements, scope, user stories, acceptance criteria, risiko, dan prioritas.",
+  strategist: "Kamu Naya, Strategy Specialist. Susun strategi produk, positioning, roadmap, prioritas fitur, trade-off, dan KPI yang relevan.",
+  designer: "Kamu Sinta, UI/UX Designer. Buat spesifikasi UI/UX konkret: information architecture, layout, components, responsive behavior, states, accessibility, dan acceptance criteria.",
+  visual: "Kamu Vina, Visual Designer. Buat arahan visual konkret: design system, warna, typography, spacing, imagery, motion, iconography, dan visual QA.",
+  writer: "Kamu Dina, Copywriter. Buat copy siap pakai: headline, subheadline, CTA, section copy, feature copy, FAQ, error/empty states bila relevan.",
+  frontend: "Kamu Andi, Frontend Developer. Hasilkan project nyata sebagai JSON VALID SAJA dengan shape {files:[{path:string,content:string}],summary:string,resource_requests:[{request:string,reason:string}]}. File harus lengkap dan runnable. Untuk website sederhana utamakan index.html, style.css, script.js. Jangan markdown fence.",
+  backend: "Kamu Beni, Backend Developer. Rancang API, service layer, validation, error handling, auth flow, dan integrasi backend yang konkret.",
+  database: "Kamu Dimas, Database Engineer. Rancang schema, relations, indexes, migrations, constraints, seed data, dan RLS bila diperlukan.",
+  security: "Kamu Rian, Security Engineer. Audit threat model, auth, secrets, input validation, XSS/CSRF, authorization, RLS, rate limiting, dan security checklist.",
+  ai: "Kamu Fajar, AI Engineer. Rancang AI workflow, prompts, model routing, structured outputs, fallback, context handling, dan evaluasi.",
+  api: "Kamu Reza, API Engineer. Rancang kontrak API, endpoint, payload, status codes, retries, timeouts, webhooks, dan integration tests.",
+  qa: "Kamu Bima, QA Engineer. Review artifact dan file project. Buat QA report konkret: PASS/FAIL, test cases, bug/risiko, acceptance checklist, dan perbaikan.",
+  reviewer: "Kamu Kevin, Code Reviewer. Review hasil engineering untuk correctness, maintainability, security, performance, dan regression risk.",
+  devops: "Kamu Yoga, DevOps Engineer. Buat deployment plan, CI/CD, environment configuration, build checks, rollback, dan operational checklist.",
+  cloud: "Kamu Aldi, Cloud Engineer. Rancang hosting, networking, storage, observability, scaling, cost controls, dan environment separation.",
+  mobile: "Kamu Riko, Mobile Developer. Rancang mobile experience, responsive behavior, navigation, API integration, offline/error states, dan mobile acceptance criteria.",
+  seo: "Kamu Sari, SEO Specialist. Buat technical SEO, metadata, sitemap/robots, structured data, internal linking, content targets, dan measurement plan.",
+  marketing: "Kamu Tio, Marketing Specialist. Buat target audience, positioning, acquisition channels, campaign ideas, funnel, CTA, dan measurement.",
+  finance: "Kamu Rio, Finance Specialist. Buat estimasi biaya, resource assumptions, pricing considerations, unit economics, dan budget risks.",
+  docs: "Kamu Lala, Documentation Specialist. Buat README, setup guide, architecture notes, usage guide, troubleshooting, dan release notes.",
+  support: "Kamu Bayu, Support Engineer. Buat support playbook, troubleshooting flows, common issues, escalation rules, dan user-facing help content."
 };
 
 function extractText(data: any): string {
@@ -47,11 +64,28 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.AI_API_KEY || "";
     const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
-    const modelByAgent: Record<AgentId, string> = {
-      designer: process.env.AI_MODEL_DESIGNER || "kr/claude-haiku-4.5",
-      developer: process.env.AI_MODEL_DEVELOPER || "kr/qwen3-coder-next",
-      writer: process.env.AI_MODEL_WRITER || "kr/glm-5",
-      qa: process.env.AI_MODEL_QA || "kr/deepseek-3.2"
+    const modelByAgent: Record<string, string> = {
+      analyst: process.env.AI_MODEL_ANALYST || "",
+      strategist: process.env.AI_MODEL_STRATEGIST || "",
+      designer: process.env.AI_MODEL_DESIGNER || "",
+      visual: process.env.AI_MODEL_VISUAL || "",
+      writer: process.env.AI_MODEL_WRITER || "",
+      frontend: process.env.AI_MODEL_FRONTEND || process.env.AI_MODEL_DEVELOPER || "",
+      backend: process.env.AI_MODEL_BACKEND || "",
+      database: process.env.AI_MODEL_DATABASE || "",
+      security: process.env.AI_MODEL_SECURITY || "",
+      ai: process.env.AI_MODEL_AI || "",
+      api: process.env.AI_MODEL_API || "",
+      qa: process.env.AI_MODEL_QA || "",
+      reviewer: process.env.AI_MODEL_REVIEWER || "",
+      devops: process.env.AI_MODEL_DEVOPS || "",
+      cloud: process.env.AI_MODEL_CLOUD || "",
+      mobile: process.env.AI_MODEL_MOBILE || "",
+      seo: process.env.AI_MODEL_SEO || "",
+      marketing: process.env.AI_MODEL_MARKETING || "",
+      finance: process.env.AI_MODEL_FINANCE || "",
+      docs: process.env.AI_MODEL_DOCS || "",
+      support: process.env.AI_MODEL_SUPPORT || ""
     };
     const model = requestedModel || modelByAgent[agent] || process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
 
@@ -80,9 +114,9 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_completion_tokens: agent === "developer" ? 12000 : agent === "qa" ? 2200 : agent === "designer" ? 1800 : 1600,
+        max_completion_tokens: agent === "frontend" ? 12000 : agent === "qa" ? 2200 : 1500,
         messages: [
-          { role: "system", content: prompts[agent] + (agent === "developer" ? " Jangan tambahkan teks di luar JSON. Utamakan ringkas tetapi lengkap." : " Jawab dalam bahasa Indonesia. Utamakan hasil konkret dan ringkas; jangan mengulang instruksi atau memberi pembukaan panjang.") },
+          { role: "system", content: prompts[agent] + (agent === "frontend" ? " Jangan tambahkan teks di luar JSON. Utamakan ringkas tetapi lengkap." : " Jawab dalam bahasa Indonesia. Utamakan hasil konkret dan ringkas; jangan mengulang instruksi atau memberi pembukaan panjang.") },
           { role: "user", content: `PROJECT:
 ${project}
 
@@ -142,7 +176,7 @@ ${context}
 
     let normalizedArtifact = artifact;
     let parsedProject: any = null;
-    if (agent === "developer") {
+    if (agent === "frontend") {
       try {
         const cleaned = artifact.replace(/^\\s*\`\`\`(?:json)?\\s*/i, "").replace(/\\s*\`\`\`\\s*$/i, "").trim();
         try {
