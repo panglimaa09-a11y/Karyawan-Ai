@@ -77,7 +77,7 @@ function extractText(data: any): string {
 
 export async function POST(request: Request) {
   try {
-    const { project } = await request.json();
+    const body = await request.json();\n    const project = body?.project;\n    const requestedModel = String(body?.model || "").trim();
     const projectText = typeof project === "string" ? project.trim().slice(0, 8000) : "";
 
     if (projectText.length < 3) {
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     // 9Router configuration. AI_BASE_URL must point to a reachable HTTPS 9Router OpenAI-compatible gateway.
     const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
     const apiKey = process.env.AI_API_KEY || "";
-    const model = process.env.AI_MODEL_RAKA || process.env.AI_MODEL || "kr/claude-sonnet-4.5";
+    const model = requestedModel || process.env.AI_MODEL_RAKA || process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
     const timeoutMs = Math.max(15000, Number(process.env.AI_TIMEOUT_MS || 45000));
 
     if (!baseUrl) {
