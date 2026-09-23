@@ -289,7 +289,10 @@ export default function Office() {
         }
       };
 
-      const employeeResults = await Promise.all(parallelAgents.map((id) => runEmployee(id)));
+      const employeeResults: Array<any> = [];
+      for (const id of parallelAgents) {
+        employeeResults.push(await runEmployee(id));
+      }
       const resultByAgent = new Map(parallelAgents.map((id, index) => [id, employeeResults[index]]));
       const developerResult = resultByAgent.get("developer");
       const designerResult = resultByAgent.get("designer");
