@@ -84,18 +84,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Project description is required." }, { status: 400 });
     }
 
-    // Provider-agnostic configuration. For 9router, use a reachable
-    // OpenAI-compatible URL such as https://YOUR-GATEWAY/v1.
-    const baseUrl = (process.env.AI_BASE_URL || "https://api.atria-asi.ai/v1").replace(/\/$/, "");
+    // 9Router configuration. AI_BASE_URL must point to a reachable HTTPS 9Router OpenAI-compatible gateway.
+    const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
     const apiKey = process.env.AI_API_KEY || "";
-    const model = process.env.AI_MODEL || "Atria-Dawn-Preview";
+    const model = process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
     const timeoutMs = Math.max(15000, Number(process.env.AI_TIMEOUT_MS || 45000));
 
     if (!baseUrl) {
       return NextResponse.json(
         {
           error:
-            "AI_BASE_URL belum dipasang di Vercel. 9router yang berjalan di localhost tidak bisa diakses langsung oleh Vercel.",
+            "AI_BASE_URL belum dipasang di Vercel. Arahkan ke 9Router HTTPS yang dapat diakses Vercel; 127.0.0.1/localhost tidak bisa diakses dari Vercel.",
           setupRequired: true
         },
         { status: 503 }
