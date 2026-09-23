@@ -17,6 +17,9 @@ type Agent = {
   position: [number, number, number];
 };
 
+type ProjectHistory = { project: string; time: string; status: string };
+type TokenUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
+
 type ManagerPlan = {
   summary: string;
   tasks: Array<{
@@ -104,6 +107,9 @@ export default function Office() {
   const [artifact, setArtifact] = useState("");
   const [plan, setPlan] = useState<ManagerPlan | null>(null);
   const [error, setError] = useState("");
+  const [sidebar, setSidebar] = useState<"history" | "tokens" | "ai" | null>(null);
+  const [history, setHistory] = useState<ProjectHistory[]>([]);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage>(null);
 
   const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
@@ -116,6 +122,11 @@ export default function Office() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Manager gagal membuat rencana.");
       setPlan(data.plan);
+      setTokenUsage(data.usage || null);
+      setHistory((items) => [
+        { project: prompt.trim(), time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), status: "Selesai" },
+        ...items
+      ].slice(0, 12));
       updateAgent("manager", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
       const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
       const sequence: Array<"designer" | "writer" | "developer" | "qa"> = ["designer", "writer", "developer", "qa"];
@@ -145,8 +156,41 @@ STATUS: PLAN READY FOR EXECUTION
 
   const selectedAgent = agents.find((a) => a.id === selected)!;
 
+  const sidebarContent = sidebar === "history" ? (
+    <>
+      <div className="side-title">Riwayat Projek</div>
+      {history.length ? history.map((item, i) => (
+        <div className="side-item" key={i}>
+          <b>{item.project}</b>
+          <span>{item.time} · {item.status}</span>
+        </div>
+      )) : <div className="side-empty">Belum ada projek yang dijalankan.</div>}
+    </>
+  ) : sidebar === "tokens" ? (
+    <>
+      <div className="side-title">Penggunaan Token</div>
+      <div className="token-card"><strong>{tokenUsage?.total_tokens ?? "—"}</strong><span>Total token terakhir</span></div>
+      <div className="token-row"><span>Input</span><b>{tokenUsage?.prompt_tokens ?? "—"}</b></div>
+      <div className="token-row"><span>Output</span><b>{tokenUsage?.completion_tokens ?? "—"}</b></div>
+      <div className="side-empty">Data berasal dari respons provider AI.</div>
+    </>
+  ) : (
+    <>
+      <div className="side-title">AI yang Dipakai</div>
+      <div className="ai-card"><div className="ai-dot" /><div><b>{process.env.NEXT_PUBLIC_AI_MODEL || "Atria-Dawn-Preview"}</b><span>Project Manager · Raka</span></div></div>
+      <div className="side-empty">Model produksi ditentukan oleh konfigurasi server.</div>
+    </>
+  );
+
   return (
     <main className="office-shell">
+      <nav className="sidebar-nav">
+        <div className="sidebar-logo">AI<br/><span>OFFICE</span></div>
+        <button className={sidebar === "history" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "history" ? null : "history")}><span>◷</span>Riwayat Projek</button>
+        <button className={sidebar === "tokens" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "tokens" ? null : "tokens")}><span>⌁</span>Penggunaan Token</button>
+        <button className={sidebar === "ai" ? "side-btn active" : "side-btn"} onClick={() => setSidebar(sidebar === "ai" ? null : "ai")}><span>✦</span>AI yang Dipakai</button>
+      </nav>
+      {sidebar && <aside className="sidebar-drawer"><button className="drawer-close" onClick={() => setSidebar(null)}>×</button>{sidebarContent}</aside>}
       <section className="scene">
         <div className="hud"><div className="brand">AI OFFICE / LIVE AGENTS</div><div className="live"><i /> REAL AI MANAGER</div></div>
         <div className="canvas-wrap"><Canvas><color attach="background" args={["#0b1017"]} /><OfficeScene agents={agents} selected={selected} setSelected={setSelected} /></Canvas></div>
