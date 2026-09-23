@@ -162,7 +162,9 @@ export default function Office() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "artifacts" | "preview" | "activity">("overview");
-  const [retryingAgent, setRetryingAgent] = useState<string | null>(null);\n  const [pushState, setPushState] = useState<"idle" | "confirm" | "pushing" | "done" | "error">("idle");\n  const [pushMessage, setPushMessage] = useState("");
+  const [retryingAgent, setRetryingAgent] = useState<string | null>(null);
+  const [pushState, setPushState] = useState<"idle" | "confirm" | "pushing" | "done" | "error">("idle");
+  const [pushMessage, setPushMessage] = useState("");
 
   useEffect(() => {
     try {
@@ -297,15 +299,21 @@ export default function Office() {
       const developerResult = resultByAgent.get("developer");
       const designerResult = resultByAgent.get("designer");
       const writerResult = resultByAgent.get("writer");
-      const developerFiles = developerResult?.files?.map((f: ProjectFile) => `FILE: ${f.path}\n${f.content}`).join("\n\n") || developerResult?.artifact || "Belum tersedia.";
+      const developerFiles = developerResult?.files?.map((f: ProjectFile) => `FILE: ${f.path}
+${f.content}`).join("
+
+") || developerResult?.artifact || "Belum tersedia.";
       const contextForQa = [
         "SINTA DESIGN:",
         designerResult?.artifact || "Belum tersedia.",
-        "\nDINA COPY:",
+        "
+DINA COPY:",
         writerResult?.artifact || "Belum tersedia.",
-        "\nANDI PROJECT FILES:",
+        "
+ANDI PROJECT FILES:",
         developerFiles
-      ].join("\n");
+      ].join("
+");
       await runEmployee("qa", contextForQa);
 
       setWorkspaceTab("artifacts");
@@ -384,11 +392,15 @@ Buat hasil baru yang lebih ringkas dan valid.`;
     let html = htmlFile;
     html = html.replace(/<link[^>]+href=["']([^"']+)["'][^>]*>/gi, (tag, href) => {
       const css = byPath.get(String(href).replace(/^\.\//, ""));
-      return css != null ? `<style>\n${css}\n</style>` : tag;
+      return css != null ? `<style>
+${css}
+</style>` : tag;
     });
     html = html.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\/script>/gi, (tag, src) => {
       const js = byPath.get(String(src).replace(/^\.\//, ""));
-      return js != null ? `<script>\n${js}\n</script>` : tag;
+      return js != null ? `<script>
+${js}
+</script>` : tag;
     });
     setPreviewHtml(html);
   }, [developerArtifact]);
@@ -569,7 +581,8 @@ Buat hasil baru yang lebih ringkas dan valid.`;
         <div className="project">
           <div style={{ fontWeight: 700, fontSize: 13 }}>New project</div>
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Contoh: Buat landing page Nexora Design untuk UMKM Indonesia..." />
-          <button className="primary" onClick={runProject} disabled={!prompt.trim() || running}>{running ? "Raka sedang bekerja..." : "START PROJECT"}</button>\n          {!running && projectFiles.length > 0 && <div className="project-ready"><b>✅ Project file siap</b><span>{projectFiles.length} file dari Andi. Buka Workspace untuk Preview, ZIP, atau Push ke GitHub.</span><button className="side-action" onClick={() => { setSidebar("workspace"); setWorkspaceOpen(true); setWorkspaceTab("preview"); }}>Buka Preview →</button></div>}
+          <button className="primary" onClick={runProject} disabled={!prompt.trim() || running}>{running ? "Raka sedang bekerja..." : "START PROJECT"}</button>
+          {!running && projectFiles.length > 0 && <div className="project-ready"><b>✅ Project file siap</b><span>{projectFiles.length} file dari Andi. Buka Workspace untuk Preview, ZIP, atau Push ke GitHub.</span><button className="side-action" onClick={() => { setSidebar("workspace"); setWorkspaceOpen(true); setWorkspaceTab("preview"); }}>Buka Preview →</button></div>}
           {error && <div className="error-box">{error}</div>}
         </div>
         <div className="agent-list">{agents.map((a) => (
