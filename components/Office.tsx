@@ -152,7 +152,11 @@ export default function Office() {
   const [delivery, setDelivery] = useState<DeliveryConfig>({ repoUrl: "", branch: "main" });
   const [history, setHistory] = useState<ProjectHistory[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(null);
-  const [aiModel, setAiModel] = useState("Atria-Dawn-Preview");
+  const [aiModel, setAiModel] = useState("—");
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelConfig, setModelConfig] = useState<Record<string, string>>({ manager: "", designer: "", developer: "", writer: "", qa: "" });
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState("");
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "artifacts" | "preview" | "activity">("overview");
@@ -191,7 +195,7 @@ export default function Office() {
     setRunning(true); setError(""); setPlan(null); setArtifact(""); setArtifacts([]); setWorkspaceOpen(true); setSidebar("workspace"); setWorkspaceTab("overview");
     setAgents((cur) => cur.map((x) => ({ ...x, status: x.id === "manager" ? "working" : "idle", progress: x.id === "manager" ? 10 : 0, task: x.id === "manager" ? "Raka sedang menganalisis proyek..." : "Menunggu Manager" })));
     try {
-      const res = await fetch("/api/manager", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim() }) });
+      const res = await fetch("/api/manager", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), model: modelConfig.manager || undefined }) });
       const data = await readApiResponse(res);
       setPlan(data.plan);
       setTokenUsage(data.usage || null);
@@ -215,7 +219,7 @@ export default function Office() {
           const agentRes = await fetch("/api/agent", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable, context })
+            body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable, context, model: modelConfig[id] || undefined })
           });
           const agentData = await readApiResponse(agentRes);
           if (Array.isArray(agentData.requests) && agentData.requests.length) {
@@ -299,7 +303,7 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
 PERBAIKI ULANG PEKERJAAN SEBELUMNYA.
 Error sebelumnya: ${current?.content || "Tidak ada detail error."}
 Buat hasil baru yang lebih ringkas dan valid.`;
-      const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: repairTask, deliverable: task.deliverable }) });
+      const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: repairTask, deliverable: task.deliverable, model: modelConfig[id] || undefined }) });
       const data = await readApiResponse(res);
       if (Array.isArray(data.requests) && data.requests.length) setRequests((items) => [...items, ...data.requests].slice(-20));
       setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: data.artifact || "Agent tidak mengembalikan artifact.", model: data.model, usage: data.usage, status: "done" } : a));
@@ -335,6 +339,27 @@ Buat hasil baru yang lebih ringkas dan valid.`;
       <div className="side-empty">Data berasal dari respons provider AI.</div>
     </>
   ) : sidebar === "ai" ? (
+    <>
+      <div className="side-title">AI Model / 9Router</div>
+      <div className="side-empty">{modelLoading ? "Mengambil daftar model dari 9Router..." : availableModels.length ? `${availableModels.length} model tersedia dari 9Router.` : (modelError || "Belum ada model.")}</div>
+      {([
+        ["manager", "Raka", "Project Manager"],
+        ["designer", "Sinta", "Designer"],
+        ["developer", "Andi", "Developer"],
+        ["writer", "Dina", "Writer"],
+        ["qa", "Bima", "QA"]
+      ] as const).map(([id, name, role]) => (
+        <label className="field-label" key={id}>{name} · {role}
+          <select className="side-input" value={modelConfig[id] || ""} onChange={(e) => setModelConfig((x) => ({ ...x, [id]: e.target.value }))} disabled={!availableModels.length}>
+            <option value="">Pilih model</option>
+            {availableModels.map((model) => <option value={model} key={model}>{model}</option>)}
+          </select>
+        </label>
+      ))}
+      <button className="primary" onClick={() => localStorage.setItem("ai-office-model-config", JSON.stringify(modelConfig))}>Simpan konfigurasi model</button>
+      <div className="side-warning">Daftar model dibaca langsung dari endpoint /v1/models milik 9Router. Nama model yang muncul mengikuti model yang benar-benar tersedia di gateway kamu.</div>
+    </>
+
     <>
       <div className="side-title">AI yang Dipakai</div>
       <div className="ai-card"><div className="ai-dot" /><div><b>{aiModel}</b><span>Project Manager · Raka</span></div></div>
