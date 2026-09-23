@@ -51,7 +51,8 @@ export async function POST(req: Request) {
 
     const baseUrl = (process.env.AI_BASE_URL || "https://api.atria-asi.ai/v1").replace(/\/$/, "");
     const model = process.env.AI_MODEL || "Atria-Dawn-Preview";
-    const timeoutMs = Math.max(15000, Number(process.env.AI_TIMEOUT_MS || 45000));
+    const configuredTimeoutMs = Number(process.env.AI_TIMEOUT_MS || 30000);
+    const timeoutMs = Math.min(30000, Math.max(10000, configuredTimeoutMs));
     const maxRetries = Math.min(1, Math.max(0, Number(process.env.AI_MAX_RETRIES || 0)));
 
     let response: Response | null = null;
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_completion_tokens: agent === "developer" ? 2200 : agent === "qa" ? 1200 : agent === "designer" ? 1400 : 1200,
+        max_completion_tokens: agent === "developer" ? 1400 : agent === "qa" ? 900 : agent === "designer" ? 1000 : 900,
         messages: [
           { role: "system", content: prompts[agent] + (agent === "developer" ? " Jangan tambahkan teks di luar JSON. Utamakan ringkas tetapi lengkap." : " Jawab dalam bahasa Indonesia. Utamakan hasil konkret dan ringkas; jangan mengulang instruksi atau memberi pembukaan panjang.") },
           { role: "user", content: `PROJECT:
