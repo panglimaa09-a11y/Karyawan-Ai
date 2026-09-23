@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+im{ NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -14,7 +14,7 @@ type Plan = {
 };
 
 function extractJsonObject(raw: string): string {
-  const cleaned = raw.replace(/^\\s*\\```(?:json)?\\s*/i, "").replace(/\\s*\\`\\`\\`\\s*$/i, "").trim();
+  const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
   const start = cleaned.indexOf("{");
   if (start < 0) throw new Error("Manager returned no JSON object.");
   let depth = 0;
