@@ -185,7 +185,7 @@ export default function Office() {
         } catch (agentError) {
           const message = agentError instanceof Error ? agentError.message : "Agent gagal.";
           setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: message, status: "error" } : a));
-          updateAgent(id, { progress: 100, status: "idle", task: "Gagal membuat artifact" });
+          updateAgent(id, { progress: 100, status: "idle", task: `Gagal: ${message.slice(0, 140)}` });
         }
       }
       setWorkspaceTab("artifacts");
