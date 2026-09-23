@@ -7,9 +7,9 @@ type AgentId = "designer" | "developer" | "writer" | "qa";
 
 const prompts: Record<AgentId, string> = {
   designer: "Kamu adalah Sinta, AI UI/UX Designer. Buat design specification yang konkret: visual direction, layout sections, components, responsive behavior, colors, typography, and acceptance criteria. Jangan hanya memberi saran umum.",
-  developer: "Kamu adalah Andi, AI Developer. Berdasarkan project dan task, hasilkan implementasi nyata berupa file tree dan kode inti yang bisa langsung dipakai di Next.js/React. Utamakan kode lengkap untuk file utama, bukan pseudocode. Jaga output ringkas dan fokus; maksimal sekitar 4500 token. Jika benar-benar membutuhkan resource dari bos (API key, repo, env, file, domain), tulis bagian terakhir dengan format: RESOURCE_REQUEST: nama resource | alasan.",
+  developer: "Kamu adalah Andi, AI Developer. Hasilkan project nyata sebagai JSON VALID SAJA dengan shape {files:[{path:string,content:string}],summary:string,resource_requests:[{request:string,reason:string}]}. Setiap file harus berisi kode lengkap yang bisa dipakai. Jangan gunakan markdown fence. Fokus pada file inti agar output tetap ringkas. Jika membutuhkan API key, repo, env, file, atau domain, masukkan ke resource_requests; jangan meminta secret lewat chat.",
   writer: "Kamu adalah Dina, AI Writer. Hasilkan copywriting nyata yang siap dipakai: headline, subheadline, CTA, section copy, feature descriptions, FAQ bila relevan. Gunakan bahasa yang sesuai permintaan project.",
-  qa: "Kamu adalah Bima, AI QA Engineer. Buat QA report ringkas dan konkret: test cases, expected result, risiko/bug, dan acceptance checklist. Maksimal 2500 token."
+  qa: "Kamu adalah Bima, AI QA Engineer. Review artifact dan file project yang diberikan. Buat QA report ringkas dan konkret: status PASS/FAIL, test cases, bug/risiko, acceptance checklist, dan perbaikan yang diperlukan. Jangan mengklaim menjalankan aplikasi jika hanya membaca kode."
 };
 
 function extractText(data: any) {
@@ -26,6 +26,7 @@ export async function POST(req: Request) {
     const agent = String(body?.agent || "") as AgentId;
     const task = String(body?.task || "").trim();
     const deliverable = String(body?.deliverable || "").trim();
+    const context = String(body?.context || "").trim();
 
     if (!project || !prompts[agent] || !task) {
       return NextResponse.json({ error: "Project, agent, dan task wajib diisi." }, { status: 400 });
@@ -103,7 +104,20 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
       return NextResponse.json({ error: "Provider AI merespons tanpa isi artifact.", agent }, { status: 502 });
     }
 
-    const requests = artifact.split("\\n").filter((line: string) => line.trim().startsWith("RESOURCE_REQUEST:")).map((line: string, index: number) => {
+    let normalizedArtifact = artifact;
+    let parsedProject: any = null;
+    if (agent === "developer") {
+      try {
+        parsedProject = JSON.parse(artifact);
+        if (!Array.isArray(parsedProject.files)) throw new Error("Developer files missing");
+        parsedProject.files = parsedProject.files.filter((f: any) => f && typeof f.path === "string" && typeof f.content === "string").slice(0, 40);
+        normalizedArtifact = JSON.stringify(parsedProject);
+      } catch {
+        parsedProject = null;
+      }
+    }
+    const requests = parsedProject?.resource_requests?.map((r: any, index: number) => ({ id: agent + "-" + Date.now() + "-" + index, from: agent, request: String(r.request || "").trim(), reason: String(r.reason || "Dibutuhkan agar task dapat dilanjutkan.").trim(), status: "pending" }))
+      .filter((x: any) => x.request) || artifact.split("\\n").filter((line: string) => line.trim().startsWith("RESOURCE_REQUEST:")).map((line: string, index: number) => {
       const raw = line.replace(/^RESOURCE_REQUEST:\\s*/i, "").trim();
       const [request, reason = "Dibutuhkan agar task dapat dilanjutkan."] = raw.split("|").map((x: string) => x.trim());
       return { id: agent + "-" + Date.now() + "-" + index, from: agent, request, reason, status: "pending" };
@@ -111,7 +125,7 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
     return NextResponse.json({
       agent,
       model: data?.model || model,
-      artifact,
+      artifact: normalizedArtifact,
       usage: data?.usage || null,
       requests
     });
