@@ -36,7 +36,12 @@ export async function POST(req: Request) {
     const baseUrl = (process.env.AI_BASE_URL || "https://api.atria-asi.ai/v1").replace(/\/$/, "");
     const model = process.env.AI_MODEL || "Atria-Dawn-Preview";
 
-    const response = await fetch(baseUrl + "/chat/completions", {
+    let response: Response | null = null;
+    let data: any = null;
+    let lastError = "Agent AI gagal mengerjakan task.";
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -61,15 +66,35 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
       })
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      return NextResponse.json({ error: data?.error?.message || "Agent AI gagal mengerjakan task." }, { status: response.status });
+        });
+        data = await response.json();
+        if (response.ok) break;
+        lastError = data?.error?.message || `Agent AI mengembalikan HTTP ${response.status}.`;
+        if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 3) {
+          return NextResponse.json({ error: lastError, status: response.status, agent }, { status: response.status });
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : "Koneksi ke provider AI gagal.";
+        if (attempt === 3) {
+          return NextResponse.json({ error: lastError, agent }, { status: 502 });
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+    }
+
+    if (!response?.ok || !data) {
+      return NextResponse.json({ error: lastError, agent }, { status: 502 });
+    }
+
+    const artifact = extractText(data);
+    if (!artifact.trim()) {
+      return NextResponse.json({ error: "Provider AI merespons tanpa isi artifact.", agent }, { status: 502 });
     }
 
     return NextResponse.json({
       agent,
       model: data?.model || model,
-      artifact: extractText(data),
+      artifact,
       usage: data?.usage || null
     });
   } catch (error) {
