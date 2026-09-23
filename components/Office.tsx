@@ -376,7 +376,7 @@ Buat hasil baru yang lebih ringkas dan valid.`;
       const css = byPath.get(String(href).replace(/^\.\//, ""));
       return css != null ? `<style>\n${css}\n</style>` : tag;
     });
-    html = html.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\\/script>/gi, (tag, src) => {
+    html = html.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\/script>/gi, (tag, src) => {
       const js = byPath.get(String(src).replace(/^\.\//, ""));
       return js != null ? `<script>\n${js}\n</script>` : tag;
     });
