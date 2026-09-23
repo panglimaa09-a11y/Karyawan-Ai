@@ -56,8 +56,6 @@ function parseManagerPlan(raw: string): Plan {
 }
 
 
-export const runtime = "nodejs";
-export const maxDuration = 120;
 
 
 type Plan = {
