@@ -4,6 +4,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, Text } from "@react-three/drei";
 import { useMemo, useState } from "react";
 import * as THREE from "three";
+import EmployeeAvatar from "./EmployeeAvatar";
 
 type Agent = {
   id: string;
@@ -30,22 +31,47 @@ const initialAgents: Agent[] = [
   { id: "designer", name: "Sinta", role: "Designer", emoji: "🎨", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.2, .45, -1.9] },
   { id: "developer", name: "Andi", role: "Developer", emoji: "👨‍💻", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.2, .45, -1.9] },
   { id: "writer", name: "Dina", role: "Writer", emoji: "✍️", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.2, .45, 1.1] },
-  { id: "qa", name: "Bima", role: "QA", emoji: "🔍", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.2, .45, 1.1] }
-];
-
-function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolean; onClick: () => void }) {
+  { id: "qa", name: "Bima", role: "QA", emoji: "🔍", status: "idle", progress: 0, task: "Menufunction Employee({ agent, selected, onClick }: { agent: Agent; selected: boolean; onClick: () => void }) {
   const ref = useMemo(() => new THREE.Group(), []);
+  const avatarColor: Record<string, string> = {
+    manager: "#6c8cff",
+    designer: "#d16cff",
+    developer: "#4dd4a8",
+    writer: "#f0b45c",
+    qa: "#63b7ff"
+  };
+
   useFrame(({ clock }) => {
-    if (agent.status === "working") ref.position.y = agent.position[1] + Math.sin(clock.elapsedTime * 3) * .025;
+    if (agent.status === "working" || agent.status === "review") {
+      ref.position.y = agent.position[1] + Math.sin(clock.elapsedTime * 3) * .025;
+    } else {
+      ref.position.y = agent.position[1];
+    }
   });
 
   return (
     <group ref={ref} position={agent.position} onClick={(e) => { e.stopPropagation(); onClick(); }}>
-      <mesh><boxGeometry args={[1.35, .14, .75]} /><meshStandardMaterial color={selected ? "#7ba7ff" : "#273243"} /></mesh>
-      <mesh position={[0, .75, -.08]}><boxGeometry args={[.62, .75, .12]} /><meshStandardMaterial color="#121a25" /></mesh>
-      <mesh position={[0, .75, .18]}><boxGeometry args={[.52, .52, .06]} /><meshStandardMaterial color={agent.status === "working" ? "#64d6a1" : "#435066"} emissive={agent.status === "working" ? "#143f2e" : "#000000"} /></mesh>
-      <Text position={[0, 1.45, 0]} fontSize={.18} color="white" anchorX="center">{agent.emoji} {agent.name}</Text>
-      <Text position={[0, 1.22, 0]} fontSize={.105} color="#9aa7b8" anchorX="center">{agent.role}</Text>
+      <mesh>
+        <boxGeometry args={[1.35, .14, .75]} />
+        <meshStandardMaterial color={selected ? "#7ba7ff" : "#273243"} />
+      </mesh>
+      <mesh position={[0, .75, -.08]}>
+        <boxGeometry args={[.62, .75, .12]} />
+        <meshStandardMaterial color="#121a25" />
+      </mesh>
+      <mesh position={[0, .75, .18]}>
+        <boxGeometry args={[.52, .52, .06]} />
+        <meshStandardMaterial
+          color={agent.status === "working" ? "#64d6a1" : "#435066"}
+          emissive={agent.status === "working" ? "#143f2e" : "#000000"}
+        />
+      </mesh>
+      <EmployeeAvatar
+        color={avatarColor[agent.id] || "#6c8cff"}
+        name={agent.name}
+        role={agent.role}
+        active={agent.status === "working" || agent.status === "review"}
+      />
     </group>
   );
 }
