@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 type AgentId = "designer" | "developer" | "writer" | "qa";
 
@@ -34,11 +34,11 @@ function extractText(data: any): string {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const project = String(body?.project || "").trim();
+    const project = String(body?.project || "").trim().slice(0, 8000);
     const agent = String(body?.agent || "") as AgentId;
     const task = String(body?.task || "").trim();
     const deliverable = String(body?.deliverable || "").trim();
-    const context = String(body?.context || "").trim();
+    const context = String(body?.context || "").trim().slice(0, 14000);
 
     if (!project || !prompts[agent] || !task) {
       return NextResponse.json({ error: "Project, agent, dan task wajib diisi." }, { status: 400 });
@@ -51,14 +51,16 @@ export async function POST(req: Request) {
 
     const baseUrl = (process.env.AI_BASE_URL || "https://api.atria-asi.ai/v1").replace(/\/$/, "");
     const model = process.env.AI_MODEL || "Atria-Dawn-Preview";
+    const timeoutMs = Math.max(15000, Number(process.env.AI_TIMEOUT_MS || 45000));
+    const maxRetries = Math.min(1, Math.max(0, Number(process.env.AI_MAX_RETRIES || 0)));
 
     let response: Response | null = null;
     let data: any = null;
     let lastError = "Agent AI gagal mengerjakan task.";
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 90000);
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
         response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
@@ -70,7 +72,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_completion_tokens: agent === "developer" ? 3500 : agent === "qa" ? 1800 : 2200,
+        max_completion_tokens: agent === "developer" ? 2200 : agent === "qa" ? 1200 : agent === "designer" ? 1400 : 1200,
         messages: [
           { role: "system", content: prompts[agent] + (agent === "developer" ? " Jangan tambahkan teks di luar JSON. Utamakan ringkas tetapi lengkap." : " Jawab dalam bahasa Indonesia. Utamakan hasil konkret dan ringkas; jangan mengulang instruksi atau memberi pembukaan panjang.") },
           { role: "user", content: `PROJECT:
@@ -110,18 +112,20 @@ ${context}
         }
       } catch (err) {
         lastError = err instanceof Error && err.name === "AbortError" ? "Provider AI timeout setelah 90 detik." : err instanceof Error ? err.message : "Koneksi ke provider AI gagal.";
-        if (attempt === 2) {
+        if (attempt === maxRetries) {
           return NextResponse.json({ error: lastError, agent }, { status: 502 });
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     }
 
     if (!response?.ok || !data) {
       return NextResponse.json({ error: lastError, agent }, { status: 502 });
     }
 
-    const artifact = extractText(data);
+    const artifact = extractText(data).trim();
     if (!artifact.trim()) {
       const finishReason = data?.choices?.[0]?.finish_reason || data?.status || "unknown";
       const refusal = data?.choices?.[0]?.message?.refusal;
@@ -141,7 +145,7 @@ ${context}
       }
     }
     const requests = parsedProject?.resource_requests?.map((r: any, index: number) => ({ id: agent + "-" + Date.now() + "-" + index, from: agent, request: String(r.request || "").trim(), reason: String(r.reason || "Dibutuhkan agar task dapat dilanjutkan.").trim(), status: "pending" }))
-      .filter((x: any) => x.request) || artifact.split("\\n").filter((line: string) => line.trim().startsWith("RESOURCE_REQUEST:")).map((line: string, index: number) => {
+      .filter((x: any) => x.request) || artifact.split(/\\r?\\n/).filter((line: string) => line.trim().startsWith("RESOURCE_REQUEST:")).map((line: string, index: number) => {
       const raw = line.replace(/^RESOURCE_REQUEST:\\s*/i, "").trim();
       const [request, reason = "Dibutuhkan agar task dapat dilanjutkan."] = raw.split("|").map((x: string) => x.trim());
       return { id: agent + "-" + Date.now() + "-" + index, from: agent, request, reason, status: "pending" };
