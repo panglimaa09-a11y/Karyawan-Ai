@@ -66,7 +66,6 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
       })
     });
 
-        });
         data = await response.json();
         if (response.ok) break;
         lastError = data?.error?.message || `Agent AI mengembalikan HTTP ${response.status}.`;
