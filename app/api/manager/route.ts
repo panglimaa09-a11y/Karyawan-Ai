@@ -1,4 +1,4 @@
-im{ NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -55,7 +55,7 @@ function parseManagerPlan(raw: string): Plan {
   }
 }
 
-port { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
