@@ -192,6 +192,45 @@ export default function Office() {
     localStorage.setItem("ai-office-project", JSON.stringify(saved));
   }, [prompt, history, plan, artifacts, artifact, aiModel, tokenUsage, requests, delivery]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadModels = async () => {
+      setModelLoading(true);
+      setModelError("");
+      try {
+        const response = await fetch("/api/models", { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || `Gagal mengambil model (HTTP ${response.status}).`);
+        const models = Array.isArray(data?.models) ? data.models.filter((m: unknown): m is string => typeof m === "string" && m.trim()) : [];
+        if (cancelled) return;
+        setAvailableModels(models);
+        setModelConfig((current) => {
+          const next = { ...current };
+          const defaults: Record<string, string> = {
+            manager: "cx/gpt-5.5",
+            designer: "cx/gpt-5.5",
+            developer: "cx/gpt-5.5",
+            writer: "cx/gpt-5.5",
+            qa: "cx/gpt-5.5"
+          };
+          (Object.keys(defaults) as Array<keyof typeof defaults>).forEach((id) => {
+            if (!next[id] || !models.includes(next[id])) {
+              next[id] = models.includes(defaults[id]) ? defaults[id] : (models[0] || "");
+            }
+          });
+          localStorage.setItem("ai-office-model-config", JSON.stringify(next));
+          return next;
+        });
+      } catch (error) {
+        if (!cancelled) setModelError(error instanceof Error ? error.message : "Gagal mengambil daftar model.");
+      } finally {
+        if (!cancelled) setModelLoading(false);
+      }
+    };
+    loadModels();
+    return () => { cancelled = true; };
+  }, []);
+
   const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
   const runProject = async () => {
