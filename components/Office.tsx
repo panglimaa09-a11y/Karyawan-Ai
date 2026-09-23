@@ -35,19 +35,33 @@ type ManagerPlan = {
 };
 
 const initialAgents: Agent[] = [
-  { id: "manager", name: "Raka", role: "Project Manager", emoji: "👨‍💼", status: "idle", progress: 0, task: "Menunggu proyek", position: [-3.7, .45, -1.9] },
-  { id: "designer", name: "Sinta", role: "Designer", emoji: "🎨", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.2, .45, -1.9] },
-  { id: "developer", name: "Andi", role: "Developer", emoji: "👨‍💻", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.2, .45, -1.9] },
-  { id: "writer", name: "Dina", role: "Writer", emoji: "✍️", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.2, .45, 1.1] },
-  { id: "qa", name: "Bima", role: "QA", emoji: "🔍", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.2, .45, 1.1] }
+  { id: "manager", name: "Raka", role: "Project Manager", emoji: "👨‍💼", status: "idle", progress: 0, task: "Menunggu proyek", position: [-4.2, .45, -2.5] },
+  { id: "analyst", name: "Ardi", role: "Business Analyst", emoji: "📊", status: "idle", progress: 0, task: "Menunggu Manager", position: [-2.8, .45, -2.5] },
+  { id: "strategist", name: "Naya", role: "Strategy", emoji: "🧠", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.4, .45, -2.5] },
+  { id: "designer", name: "Sinta", role: "UI/UX Designer", emoji: "🎨", status: "idle", progress: 0, task: "Menunggu Manager", position: [0, .45, -2.5] },
+  { id: "visual", name: "Vina", role: "Visual Designer", emoji: "🖌️", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.4, .45, -2.5] },
+  { id: "writer", name: "Dina", role: "Copywriter", emoji: "✍️", status: "idle", progress: 0, task: "Menunggu Manager", position: [2.8, .45, -2.5] },
+  { id: "frontend", name: "Andi", role: "Frontend Developer", emoji: "💻", status: "idle", progress: 0, task: "Menunggu Manager", position: [-4.2, .45, -.5] },
+  { id: "backend", name: "Beni", role: "Backend Developer", emoji: "⚙️", status: "idle", progress: 0, task: "Menunggu Manager", position: [-2.8, .45, -.5] },
+  { id: "database", name: "Dimas", role: "Database Engineer", emoji: "🗄️", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.4, .45, -.5] },
+  { id: "security", name: "Rian", role: "Security Engineer", emoji: "🔐", status: "idle", progress: 0, task: "Menunggu Manager", position: [0, .45, -.5] },
+  { id: "ai", name: "Fajar", role: "AI Engineer", emoji: "🤖", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.4, .45, -.5] },
+  { id: "api", name: "Reza", role: "API Engineer", emoji: "🔌", status: "idle", progress: 0, task: "Menunggu Manager", position: [2.8, .45, -.5] },
+  { id: "qa", name: "Bima", role: "QA Engineer", emoji: "🧪", status: "idle", progress: 0, task: "Menunggu Manager", position: [-4.2, .45, 1.5] },
+  { id: "reviewer", name: "Kevin", role: "Code Reviewer", emoji: "🔍", status: "idle", progress: 0, task: "Menunggu Manager", position: [-2.8, .45, 1.5] },
+  { id: "devops", name: "Yoga", role: "DevOps Engineer", emoji: "🚀", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.4, .45, 1.5] },
+  { id: "cloud", name: "Aldi", role: "Cloud Engineer", emoji: "☁️", status: "idle", progress: 0, task: "Menunggu Manager", position: [0, .45, 1.5] },
+  { id: "mobile", name: "Riko", role: "Mobile Developer", emoji: "📱", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.4, .45, 1.5] },
+  { id: "seo", name: "Sari", role: "SEO Specialist", emoji: "🌐", status: "idle", progress: 0, task: "Menunggu Manager", position: [2.8, .45, 1.5] },
+  { id: "marketing", name: "Tio", role: "Marketing", emoji: "📈", status: "idle", progress: 0, task: "Menunggu Manager", position: [-2.1, .45, 3.2] },
+  { id: "finance", name: "Rio", role: "Finance", emoji: "💰", status: "idle", progress: 0, task: "Menunggu Manager", position: [0, .45, 3.2] },
+  { id: "docs", name: "Lala", role: "Documentation", emoji: "📚", status: "idle", progress: 0, task: "Menunggu Manager", position: [2.1, .45, 3.2] },
+  { id: "support", name: "Bayu", role: "Support Engineer", emoji: "🛠️", status: "idle", progress: 0, task: "Menunggu Manager", position: [3.9, .45, 3.2] }
 ];
 
-const loungePositions: Record<string, [number, number, number]> = {
-  designer: [-3.8, .45, 2.35],
-  developer: [-1.9, .45, 2.35],
-  writer: [1.9, .45, 2.35],
-  qa: [3.8, .45, 2.35]
-};
+const loungePositions: Record<string, [number, number, number]> = Object.fromEntries(
+  initialAgents.filter((a) => a.id !== "manager").map((a) => [a.id, a.position])
+);
 
 function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolean; onClick: () => void }) {
   const [group, setGroup] = useState<THREE.Group | null>(null);
