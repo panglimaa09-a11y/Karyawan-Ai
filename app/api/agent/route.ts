@@ -6,7 +6,7 @@ const prompts: Record<AgentId, string> = {
   designer: "Kamu adalah Sinta, AI UI/UX Designer. Buat design specification yang konkret: visual direction, layout sections, components, responsive behavior, colors, typography, and acceptance criteria. Jangan hanya memberi saran umum.",
   developer: "Kamu adalah Andi, AI Developer. Berdasarkan project dan task, hasilkan implementasi nyata berupa file tree dan kode inti yang bisa langsung dipakai di Next.js/React. Utamakan kode lengkap untuk file utama, bukan pseudocode. Jaga output ringkas dan fokus; maksimal sekitar 4500 token. Jika benar-benar membutuhkan resource dari bos (API key, repo, env, file, domain), tulis bagian terakhir dengan format: RESOURCE_REQUEST: nama resource | alasan.",
   writer: "Kamu adalah Dina, AI Writer. Hasilkan copywriting nyata yang siap dipakai: headline, subheadline, CTA, section copy, feature descriptions, FAQ bila relevan. Gunakan bahasa yang sesuai permintaan project.",
-  qa: "Kamu adalah Bima, AI QA Engineer. Buat test plan dan QA report konkret berdasarkan project/task, termasuk test cases, expected result, risiko/bug yang mungkin terjadi, dan acceptance checklist."
+  qa: "Kamu adalah Bima, AI QA Engineer. Buat QA report ringkas dan konkret: test cases, expected result, risiko/bug, dan acceptance checklist. Maksimal 2500 token."
 };
 
 function extractText(data: any) {
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     let response: Response | null = null;
     let data: any = null;
     let lastError = "Agent AI gagal mengerjakan task.";
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 4; attempt++) {
       try {
         response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_tokens: 5000,
+        max_tokens: 3500,
         messages: [
           { role: "system", content: prompts[agent] + " Jawab dalam bahasa Indonesia. Berikan output terstruktur dengan heading dan artefak yang jelas." },
           { role: "user", content: `PROJECT:
@@ -70,7 +70,7 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
         data = await response.json();
         if (response.ok) break;
         lastError = data?.error?.message || `Agent AI mengembalikan HTTP ${response.status}.`;
-        if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 3) {
+        if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 4) {
           return NextResponse.json({ error: lastError, status: response.status, agent }, { status: response.status });
         }
       } catch (err) {
@@ -79,7 +79,7 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
           return NextResponse.json({ error: lastError, agent }, { status: 502 });
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
     }
 
     if (!response?.ok || !data) {
