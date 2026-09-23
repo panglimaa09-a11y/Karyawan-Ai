@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 
 type Plan = {
@@ -78,8 +78,9 @@ function extractText(data: any): string {
 export async function POST(request: Request) {
   try {
     const { project } = await request.json();
+    const projectText = typeof project === "string" ? project.trim().slice(0, 8000) : "";
 
-    if (!project || typeof project !== "string" || project.trim().length < 3) {
+    if (projectText.length < 3) {
       return NextResponse.json({ error: "Project description is required." }, { status: 400 });
     }
 
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
     const baseUrl = (process.env.AI_BASE_URL || "https://api.atria-asi.ai/v1").replace(/\/$/, "");
     const apiKey = process.env.AI_API_KEY || "";
     const model = process.env.AI_MODEL || "Atria-Dawn-Preview";
+    const timeoutMs = Math.max(15000, Number(process.env.AI_TIMEOUT_MS || 45000));
 
     if (!baseUrl) {
       return NextResponse.json(
@@ -100,12 +102,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model,
         temperature: 0.2,
@@ -115,10 +122,13 @@ export async function POST(request: Request) {
             content:
               "You are Raka, the Project Manager of an AI software team. Analyze the user's project and create an actionable execution plan. Return ONLY valid JSON with this shape: {summary:string,tasks:[{agent:'designer'|'developer'|'writer'|'qa',task:string,deliverable:string}]} . Create exactly 4 tasks, one for each agent. Be concrete and practical. Do not invent access to external systems."
           },
-          { role: "user", content: project.trim() }
+          { role: "user", content: projectText }
         ]
       })
-    });
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     const responseText = await response.text();
     let data: any = {};
