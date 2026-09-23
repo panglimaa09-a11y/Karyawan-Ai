@@ -141,12 +141,12 @@ function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolea
 function OfficeScene({ agents, selected, setSelected }: { agents: Agent[]; selected: string; setSelected: (id: string) => void }) {
   return (
     <>
-      <PerspectiveCamera makeDefault position={[9, 10, 11]} fov={48} />
+      <PerspectiveCamera makeDefault position={[11, 12, 14]} fov={50} />
       <OrbitControls enablePan={false} minDistance={7} maxDistance={20} target={[0, 0, 0]} />
       <ambientLight intensity={2.2} /><directionalLight position={[4, 9, 4]} intensity={3} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -.05, 0]}><planeGeometry args={[11, 8]} /><meshStandardMaterial color="#b99572" /></mesh>
-      <mesh position={[0, 1.45, -4]}><boxGeometry args={[11, 2.8, .12]} /><meshStandardMaterial color="#6f6258" /></mesh>
-      <mesh position={[-5.45, 1.45, 0]}><boxGeometry args={[.12, 2.8, 8]} /><meshStandardMaterial color="#65584f" /></mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -.05, 0]}><planeGeometry args={[14, 10]} /><meshStandardMaterial color="#b99572" /></mesh>
+      <mesh position={[0, 1.45, -4]}><boxGeometry args={[14, 2.8, .12]} /><meshStandardMaterial color="#6f6258" /></mesh>
+      <mesh position={[-5.45, 1.45, 0]}><boxGeometry args={[.12, 2.8, 10]} /><meshStandardMaterial color="#65584f" /></mesh>
       <mesh position={[5.45, 1.45, 0]}><boxGeometry args={[.12, 2.8, 8]} /><meshStandardMaterial color="#65584f" /></mesh>
       <mesh position={[0, .8, 3]}><boxGeometry args={[3.2, .16, 1.1]} /><meshStandardMaterial color="#563f32" /></mesh>
       <Text position={[0, .95, 3]} rotation={[-Math.PI / 2, 0, 0]} fontSize={.24} color="#ded0c2" anchorX="center">MEETING</Text>
@@ -173,6 +173,7 @@ export default function Office() {
   const [modelConfig, setModelConfig] = useState<Record<string, string>>({ manager: "", ...Object.fromEntries(initialAgents.filter((a) => a.id !== "manager").map((a) => [a.id, ""])) });
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState("");
+  const [agentSearch, setAgentSearch] = useState("");
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "artifacts" | "preview" | "activity">("overview");
@@ -222,13 +223,7 @@ export default function Office() {
         setAvailableModels(models);
         setModelConfig((current) => {
           const next = { ...current };
-          const defaults: Record<string, string> = {
-            manager: "cx/gpt-5.5",
-            designer: "cx/gpt-5.5",
-            developer: "cx/gpt-5.5",
-            writer: "cx/gpt-5.5",
-            qa: "cx/gpt-5.5"
-          };
+          const defaults: Record<string, string> = Object.fromEntries(initialAgents.map((a) => [a.id, "cx/gpt-5.5"]));
           (Object.keys(defaults) as Array<keyof typeof defaults>).forEach((id) => {
             if (!next[id] || !models.includes(next[id])) {
               next[id] = models.includes(defaults[id]) ? defaults[id] : (models[0] || "");
@@ -522,7 +517,7 @@ ${js}
         <button className={workspaceTab === "activity" ? "active" : ""} onClick={() => setWorkspaceTab("activity")}>Activity</button>
       </nav>
       <div className="workspace-body">
-        {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
+        {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>AI COMPANY CONTROL CENTER</span><strong>{running ? "Team is working..." : artifacts.length ? "Work completed" : "Ready to start"}</strong><p>Raka mengorkestrasi {agents.length - 1} spesialis. Pekerjaan dijalankan dalam batch paralel, hasil masuk ke Workspace, lalu bisa Preview, ZIP, atau Push ke GitHub.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
         {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3>{a.agent === "frontend" && a.files?.length ? <><div className="workspace-actions"><button className="primary" onClick={() => setWorkspaceTab("preview")}>▶ Preview Project</button><button className="side-action" onClick={downloadProjectZip}>📦 Download ZIP</button><button className="primary" disabled={!delivery.repoUrl.trim() || pushState === "pushing"} onClick={() => setPushState("confirm")}>🚀 Push ke GitHub</button></div><div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div></> : null}<pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
         {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI PROJECT PREVIEW</span><span>{previewHtml ? "READY" : "NO BUILD"}</span></div>{previewHtml ? <iframe title="AI project preview" sandbox="allow-scripts" srcDoc={previewHtml} style={{width:"100%",minHeight:520,border:0,borderRadius:14,background:"#fff"}} /> : <div className="side-empty">Belum ada index.html dari Andi. Jalankan project sampai Frontend Developer selesai menghasilkan file.</div>}</div>}
         {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
@@ -567,15 +562,17 @@ ${js}
       </section>
       <aside className="panel">
         <h1>AI Office</h1>
-        <div className="muted">Masukkan proyek. Raka akan membuat rencana kerja nyata untuk tim AI.</div>
+        <div className="muted">Masukkan proyek. Raka membagi pekerjaan ke tim AI dan menjalankannya dalam batch paralel.</div>
         <div className="project">
-          <div style={{ fontWeight: 700, fontSize: 13 }}>New project</div>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>New project · AI Team Orchestrator</div><div className="quick-prompts"><button onClick={() => setPrompt("Buat landing page bisnis modern lengkap dengan responsive UI, SEO, form kontak, dan dokumentasi.")}>🌐 Website</button><button onClick={() => setPrompt("Buat aplikasi dashboard SaaS dengan auth, database, billing, admin panel, dan API.")}>📊 SaaS</button><button onClick={() => setPrompt("Buat aplikasi mobile dengan API, autentikasi, offline state, dan dokumentasi.")}>📱 Mobile</button></div>
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Contoh: Buat landing page Nexora Design untuk UMKM Indonesia..." />
           <button className="primary" onClick={runProject} disabled={!prompt.trim() || running}>{running ? "Raka sedang bekerja..." : "START PROJECT"}</button>
           {!running && projectFiles.length > 0 && <div className="project-ready"><b>✅ Project file siap</b><span>{projectFiles.length} file dari Andi. Buka Workspace untuk Preview, ZIP, atau Push ke GitHub.</span><button className="side-action" onClick={() => { setSidebar("workspace"); setWorkspaceOpen(true); setWorkspaceTab("preview"); }}>Buka Preview →</button></div>}
           {error && <div className="error-box">{error}</div>}
         </div>
-        <div className="agent-list">{agents.map((a) => (
+        <div className="team-stats"><div><b>{agents.length}</b><span>AI Employees</span></div><div><b>{agents.filter(a => a.status === "working" || a.status === "review").length}</b><span>Working</span></div><div><b>{artifacts.filter(a => a.status === "done").length}</b><span>Artifacts</span></div></div>
+        <input className="agent-search" value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)} placeholder="Cari karyawan atau divisi..." />
+        <div className="agent-list">{agents.filter((a) => `${a.name} ${a.role}`.toLowerCase().includes(agentSearch.toLowerCase())).map((a) => (
           <div className="agent" key={a.id} onClick={() => setSelected(a.id)}>
             <div className="agent-top"><div className="agent-name">{a.emoji} {a.name} · {a.role}</div><div className="badge">{a.status}</div></div>
             <div className="task">{a.task}</div><div className="progress"><span style={{ width: `${a.progress}%` }} /></div>
