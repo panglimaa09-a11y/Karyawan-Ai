@@ -12,11 +12,23 @@ const prompts: Record<AgentId, string> = {
   qa: "Kamu adalah Bima, AI QA Engineer. Review artifact dan file project yang diberikan. Buat QA report ringkas dan konkret: status PASS/FAIL, test cases, bug/risiko, acceptance checklist, dan perbaikan yang diperlukan. Jangan mengklaim menjalankan aplikasi jika hanya membaca kode."
 };
 
-function extractText(data: any) {
-  return data?.choices?.[0]?.message?.content
-    ?? data?.output_text
-    ?? data?.output?.flatMap((x: any) => x?.content ?? []).find((x: any) => x?.text)?.text
-    ?? "";
+function extractText(data: any): string {
+  const message = data?.choices?.[0]?.message;
+  if (typeof message?.content === "string") return message.content;
+  if (Array.isArray(message?.content)) {
+    const text = message.content.map((part: any) => typeof part === "string" ? part : part?.text || part?.content || "").filter(Boolean).join("\n");
+    if (text.trim()) return text;
+  }
+  if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text;
+  if (Array.isArray(data?.content)) {
+    const text = data.content.map((part: any) => typeof part === "string" ? part : part?.text || part?.content || "").filter(Boolean).join("\n");
+    if (text.trim()) return text;
+  }
+  if (Array.isArray(data?.output)) {
+    const text = data.output.flatMap((item: any) => Array.isArray(item?.content) ? item.content : [item]).map((part: any) => typeof part === "string" ? part : part?.text || part?.content || "").filter(Boolean).join("\n");
+    if (text.trim()) return text;
+  }
+  return "";
 }
 
 export async function POST(req: Request) {
@@ -54,9 +66,9 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_tokens: agent === "developer" ? 3000 : agent === "qa" ? 1800 : 1600,
+        max_completion_tokens: agent === "developer" ? 3000 : agent === "qa" ? 1800 : 1600,
         messages: [
-          { role: "system", content: prompts[agent] + " Jawab dalam bahasa Indonesia. Berikan output terstruktur dengan heading dan artefak yang jelas." },
+          { role: "system", content: prompts[agent] + (agent === "developer" ? " Jangan tambahkan teks di luar JSON." : " Jawab dalam bahasa Indonesia. Berikan output terstruktur dengan heading dan artefak yang jelas.") },
           { role: "user", content: `PROJECT:
 ${project}
 
@@ -66,7 +78,10 @@ ${task}
 EXPECTED DELIVERABLE:
 ${deliverable}
 
-Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinjau user, bukan sekadar penjelasan tentang cara mengerjakannya.` }
+${context ? `CONTEXT DARI PEKERJA LAIN:
+${context}
+
+` : ""}Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinjau user, bukan sekadar penjelasan tentang cara mengerjakannya.` }
         ]
       })
     });
@@ -101,7 +116,9 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
 
     const artifact = extractText(data);
     if (!artifact.trim()) {
-      return NextResponse.json({ error: "Provider AI merespons tanpa isi artifact.", agent }, { status: 502 });
+      const finishReason = data?.choices?.[0]?.finish_reason || data?.status || "unknown";
+      const refusal = data?.choices?.[0]?.message?.refusal;
+      return NextResponse.json({ error: refusal ? "Provider menolak task: " + String(refusal).slice(0, 300) : "Provider AI mengembalikan respons tanpa teks (finish_reason: " + finishReason + ").", agent }, { status: 502 });
     }
 
     let normalizedArtifact = artifact;
