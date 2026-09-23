@@ -162,7 +162,7 @@ export default function Office() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "artifacts" | "preview" | "activity">("overview");
-  const [retryingAgent, setRetryingAgent] = useState<string | null>(null);
+  const [retryingAgent, setRetryingAgent] = useState<string | null>(null);\n  const [pushState, setPushState] = useState<"idle" | "confirm" | "pushing" | "done" | "error">("idle");\n  const [pushMessage, setPushMessage] = useState("");
 
   useEffect(() => {
     try {
@@ -393,6 +393,35 @@ Buat hasil baru yang lebih ringkas dan valid.`;
     setPreviewHtml(html);
   }, [developerArtifact]);
 
+  const publishProject = async () => {
+    if (!projectFiles.length || !delivery.repoUrl.trim() || pushState === "pushing") return;
+    setPushState("pushing");
+    setPushMessage("");
+    try {
+      const response = await fetch("/api/github/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repoUrl: delivery.repoUrl.trim(),
+          branch: delivery.branch.trim() || "main",
+          message: `feat: publish AI Office project — ${prompt.trim().slice(0, 60)}`,
+          files: projectFiles
+        })
+      });
+      const data = await readApiResponse(response);
+      setPushState("done");
+      setPushMessage(`Berhasil push ${data.files?.length || projectFiles.length} file ke ${data.repo}/${data.branch}.`);
+      setHistory((items) => [{
+        project: prompt.trim(),
+        time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        status: "Pushed ke GitHub"
+      }, ...items].slice(0, 12));
+    } catch (e) {
+      setPushState("error");
+      setPushMessage(e instanceof Error ? e.message : "Push ke GitHub gagal.");
+    }
+  };
+
   const downloadProjectZip = () => {
     if (!projectFiles.length) return;
     const crcTable = (() => {
@@ -492,7 +521,7 @@ Buat hasil baru yang lebih ringkas dan valid.`;
       </nav>
       <div className="workspace-body">
         {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
-        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3>{a.agent === "developer" && a.files?.length ? <><div className="workspace-actions"><button className="primary" onClick={() => setWorkspaceTab("preview")}>▶ Preview Project</button><button className="side-action" onClick={downloadProjectZip}>📦 Download ZIP</button></div><div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div></> : null}<pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
+        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3>{a.agent === "developer" && a.files?.length ? <><div className="workspace-actions"><button className="primary" onClick={() => setWorkspaceTab("preview")}>▶ Preview Project</button><button className="side-action" onClick={downloadProjectZip}>📦 Download ZIP</button><button className="primary" disabled={!delivery.repoUrl.trim() || pushState === "pushing"} onClick={() => setPushState("confirm")}>🚀 Push ke GitHub</button></div><div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div></> : null}<pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
         {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI PROJECT PREVIEW</span><span>{previewHtml ? "READY" : "NO BUILD"}</span></div>{previewHtml ? <iframe title="AI project preview" sandbox="allow-scripts" srcDoc={previewHtml} style={{width:"100%",minHeight:520,border:0,borderRadius:14,background:"#fff"}} /> : <div className="side-empty">Belum ada index.html dari Andi. Jalankan project sampai Developer selesai menghasilkan file.</div>}</div>}
         {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
       </div>
@@ -505,10 +534,15 @@ Buat hasil baru yang lebih ringkas dan valid.`;
       <label className="field-label">Branch</label>
       <input className="side-input" value={delivery.branch} onChange={e => setDelivery(d => ({ ...d, branch: e.target.value }))} placeholder="main" />
       <div className="side-item">
-        <b>📦 Perintah Delivery</b>
-        <span>Setelah Andi menghasilkan file project, kamu bisa memberi perintah: “Push project ini ke repository yang saya berikan.”</span>
+        <b>🚀 Publish dengan persetujuan</b>
+        <span>Andi menghasilkan file → kamu cek Preview → kamu klik Push → aplikasi meminta konfirmasi → baru commit dibuat di GitHub.</span>
       </div>
-      <div className="side-warning">Push otomatis membutuhkan koneksi GitHub yang aman di server. Jangan memasukkan GitHub token ke kolom ini.</div>
+      {projectFiles.length > 0 && <div className="side-item"><b>📄 {projectFiles.length} file siap dikirim</b><span>{projectFiles.slice(0, 5).map(f => f.path).join(" · ")}{projectFiles.length > 5 ? " · ..." : ""}</span></div>}
+      <div className="side-warning">GitHub token hanya boleh disimpan sebagai GITHUB_TOKEN di environment server. Jangan tempel token di kolom Repository.</div>
+      {pushState === "confirm" && <div className="confirm-card"><b>Push project ke GitHub?</b><span>{projectFiles.length} file akan ditulis ke <strong>{delivery.repoUrl || "repository"}</strong> branch <strong>{delivery.branch || "main"}</strong>.</span><div className="workspace-actions"><button className="primary" onClick={publishProject}>Ya, Push Sekarang</button><button className="side-action" onClick={() => setPushState("idle")}>Batal</button></div></div>}
+      {pushState === "pushing" && <div className="side-item"><b>⏳ Publishing...</b><span>Commit sedang dibuat.</span></div>}
+      {pushState === "done" && <div className="side-item"><b>✅ GitHub berhasil</b><span>{pushMessage}</span></div>}
+      {pushState === "error" && <div className="error-box">{pushMessage}</div>}
       <button className="primary" onClick={() => { setSidebar("workspace"); setWorkspaceOpen(true); setWorkspaceTab("artifacts"); }}>Lihat File / Artifact →</button>
     </>
   ) : null;
@@ -535,7 +569,7 @@ Buat hasil baru yang lebih ringkas dan valid.`;
         <div className="project">
           <div style={{ fontWeight: 700, fontSize: 13 }}>New project</div>
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Contoh: Buat landing page Nexora Design untuk UMKM Indonesia..." />
-          <button className="primary" onClick={runProject} disabled={!prompt.trim() || running}>{running ? "Raka sedang bekerja..." : "START PROJECT"}</button>
+          <button className="primary" onClick={runProject} disabled={!prompt.trim() || running}>{running ? "Raka sedang bekerja..." : "START PROJECT"}</button>\n          {!running && projectFiles.length > 0 && <div className="project-ready"><b>✅ Project file siap</b><span>{projectFiles.length} file dari Andi. Buka Workspace untuk Preview, ZIP, atau Push ke GitHub.</span><button className="side-action" onClick={() => { setSidebar("workspace"); setWorkspaceOpen(true); setWorkspaceTab("preview"); }}>Buka Preview →</button></div>}
           {error && <div className="error-box">{error}</div>}
         </div>
         <div className="agent-list">{agents.map((a) => (
