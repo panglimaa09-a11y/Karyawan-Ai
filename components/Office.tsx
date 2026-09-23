@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, Text } from "@react-three/drei";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import * as THREE from "three";
 import EmployeeAvatar from "./EmployeeAvatar";
 
@@ -50,7 +50,7 @@ const loungePositions: Record<string, [number, number, number]> = {
 };
 
 function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolean; onClick: () => void }) {
-  const ref = useRef<THREE.Group>(null);
+  const [group, setGroup] = useState<THREE.Group | null>(null);
   const avatarColor: Record<string, string> = {
     manager: "#6c8cff",
     designer: "#d16cff",
@@ -65,7 +65,6 @@ function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolea
     : lounge;
 
   useFrame(({ clock }) => {
-    const group = ref.current;
     if (!group) return;
     const dx = target[0] - group.position.x;
     const dz = target[2] - group.position.z;
@@ -84,12 +83,12 @@ function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolea
     (group.userData as { initialized?: boolean }).initialized = true;
   });
 
-  const currentPosition = ref.current?.position;
+  const currentPosition = group?.position;
   const atDesk = currentPosition ? Math.hypot(currentPosition.x - agent.position[0], currentPosition.z - agent.position[2]) < .22 : false;
   const walking = !atDesk && agent.id !== "manager";
 
   return (
-    <group ref={ref} position={agent.position} onClick={(e) => { e.stopPropagation(); onClick(); }}>
+    <group ref={setGroup} position={agent.position} onClick={(e) => { e.stopPropagation(); onClick(); }}>
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[1.35, .14, .75]} />
         <meshStandardMaterial color={selected ? "#7ba7ff" : "#273243"} />
