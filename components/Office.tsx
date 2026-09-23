@@ -279,7 +279,7 @@ export default function Office() {
           if (Array.isArray(agentData.requests) && agentData.requests.length) {
             setRequests((items) => [...items, ...agentData.requests].slice(-20));
           }
-          const files: ProjectFile[] | undefined = id === "developer" && Array.isArray(agentData.files)
+          const files: ProjectFile[] | undefined = id === "frontend" && Array.isArray(agentData.files)
             ? agentData.files.filter((f: any) => f?.path && typeof f.content === "string")
             : undefined;
           setArtifacts((items) => items.map((a) => a.agent === id
