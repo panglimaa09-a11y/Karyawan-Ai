@@ -77,7 +77,9 @@ function extractText(data: any): string {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();\n    const project = body?.project;\n    const requestedModel = String(body?.model || "").trim();
+    const body = await request.json();
+    const project = body?.project;
+    const requestedModel = String(body?.model || "").trim();
     const projectText = typeof project === "string" ? project.trim().slice(0, 8000) : "";
 
     if (projectText.length < 3) {
