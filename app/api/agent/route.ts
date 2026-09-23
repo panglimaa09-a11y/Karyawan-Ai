@@ -38,7 +38,8 @@ export async function POST(req: Request) {
     const agent = String(body?.agent || "") as AgentId;
     const task = String(body?.task || "").trim();
     const deliverable = String(body?.deliverable || "").trim();
-    const context = String(body?.context || "").trim().slice(0, 14000);\n    const requestedModel = String(body?.model || "").trim();
+    const context = String(body?.context || "").trim().slice(0, 14000);
+    const requestedModel = String(body?.model || "").trim();
 
     if (!project || !prompts[agent] || !task) {
       return NextResponse.json({ error: "Project, agent, dan task wajib diisi." }, { status: 400 });
@@ -152,8 +153,8 @@ ${context}
       }
     }
     const requests = parsedProject?.resource_requests?.map((r: any, index: number) => ({ id: agent + "-" + Date.now() + "-" + index, from: agent, request: String(r.request || "").trim(), reason: String(r.reason || "Dibutuhkan agar task dapat dilanjutkan.").trim(), status: "pending" }))
-      .filter((x: any) => x.request) || artifact.split(/\\r?\\n/).filter((line: string) => line.trim().startsWith("RESOURCE_REQUEST:")).map((line: string, index: number) => {
-      const raw = line.replace(/^RESOURCE_REQUEST:\\s*/i, "").trim();
+      .filter((x: any) => x.request) || artifact.split(/\r?\n/).filter((line: string) => line.trim().startsWith("RESOURCE_REQUEST:")).map((line: string, index: number) => {
+      const raw = line.replace(/^RESOURCE_REQUEST:\s*/i, "").trim();
       const [request, reason = "Dibutuhkan agar task dapat dilanjutkan."] = raw.split("|").map((x: string) => x.trim());
       return { id: agent + "-" + Date.now() + "-" + index, from: agent, request, reason, status: "pending" };
     }).filter((x: any) => x.request);
