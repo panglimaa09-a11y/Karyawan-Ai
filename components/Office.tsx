@@ -242,16 +242,19 @@ export default function Office() {
         }
       };
 
-      await Promise.all(parallelAgents.map((id) => runEmployee(id)));
-
-      const developerArtifact = artifacts.find((a) => a.agent === "developer");
+      const employeeResults = await Promise.all(parallelAgents.map((id) => runEmployee(id)));
+      const resultByAgent = new Map(parallelAgents.map((id, index) => [id, employeeResults[index]]));
+      const developerResult = resultByAgent.get("developer");
+      const designerResult = resultByAgent.get("designer");
+      const writerResult = resultByAgent.get("writer");
+      const developerFiles = developerResult?.files?.map((f: ProjectFile) => `FILE: ${f.path}\n${f.content}`).join("\n\n") || developerResult?.artifact || "Belum tersedia.";
       const contextForQa = [
         "SINTA DESIGN:",
-        artifacts.find((a) => a.agent === "designer")?.content || "Belum tersedia.",
+        designerResult?.artifact || "Belum tersedia.",
         "\nDINA COPY:",
-        artifacts.find((a) => a.agent === "writer")?.content || "Belum tersedia.",
+        writerResult?.artifact || "Belum tersedia.",
         "\nANDI PROJECT FILES:",
-        developerArtifact?.files?.map((f) => `FILE: ${f.path}\n${f.content}`).join("\n\n") || developerArtifact?.content || "Belum tersedia."
+        developerFiles
       ].join("\n");
       await runEmployee("qa", contextForQa);
 
