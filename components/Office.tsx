@@ -270,13 +270,9 @@ export default function Office() {
           if (Array.isArray(agentData.requests) && agentData.requests.length) {
             setRequests((items) => [...items, ...agentData.requests].slice(-20));
           }
-          let files: ProjectFile[] | undefined;
-          if (id === "developer") {
-            try {
-              const parsed = JSON.parse(agentData.artifact);
-              if (Array.isArray(parsed.files)) files = parsed.files.filter((f: any) => f?.path && typeof f.content === "string");
-            } catch { /* keep raw artifact if provider did not return valid JSON */ }
-          }
+          const files: ProjectFile[] | undefined = id === "developer" && Array.isArray(agentData.files)
+            ? agentData.files.filter((f: any) => f?.path && typeof f.content === "string")
+            : undefined;
           setArtifacts((items) => items.map((a) => a.agent === id
             ? { ...a, content: agentData.artifact || "Agent tidak mengembalikan artifact.", files, model: agentData.model, usage: agentData.usage, status: "done" }
             : a
@@ -354,13 +350,9 @@ Buat hasil baru yang lebih ringkas dan valid.`;
       const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: repairTask, deliverable: task.deliverable, model: modelConfig[id] || undefined }) });
       const data = await readApiResponse(res);
       if (Array.isArray(data.requests) && data.requests.length) setRequests((items) => [...items, ...data.requests].slice(-20));
-      let retryFiles: ProjectFile[] | undefined;
-      if (id === "developer") {
-        try {
-          const parsed = JSON.parse(data.artifact);
-          if (Array.isArray(parsed.files)) retryFiles = parsed.files.filter((f: any) => f?.path && typeof f.content === "string");
-        } catch {}
-      }
+      const retryFiles: ProjectFile[] | undefined = id === "developer" && Array.isArray(data.files)
+        ? data.files.filter((f: any) => f?.path && typeof f.content === "string")
+        : undefined;
       setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: data.artifact || "Agent tidak mengembalikan artifact.", files: retryFiles, model: data.model, usage: data.usage, status: "done" } : a));
       updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: "Perbaikan selesai" });
       setWorkspaceTab("artifacts");
