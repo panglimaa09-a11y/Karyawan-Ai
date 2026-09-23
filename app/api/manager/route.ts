@@ -58,14 +58,7 @@ function parseManagerPlan(raw: string): Plan {
 
 
 
-type Plan = {
-  summary: string;
-  tasks: Array<{
-    agent: "designer" | "developer" | "writer" | "qa";
-    task: string;
-    deliverable: string;
-  }>;
-};
+;
 
 function extractText(data: any): string {
   if (typeof data?.output_text === "string") return data.output_text;
