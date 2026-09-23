@@ -359,7 +359,6 @@ Buat hasil baru yang lebih ringkas dan valid.`;
       <button className="primary" onClick={() => localStorage.setItem("ai-office-model-config", JSON.stringify(modelConfig))}>Simpan konfigurasi model</button>
       <div className="side-warning">Daftar model dibaca langsung dari endpoint /v1/models milik 9Router. Nama model yang muncul mengikuti model yang benar-benar tersedia di gateway kamu.</div>
     </>
->
   ) : sidebar === "requests" ? (
     <>
       <div className="side-title">Permintaan AI ke Bos</div>
