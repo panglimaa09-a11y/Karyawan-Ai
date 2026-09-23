@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_completion_tokens: agent === "developer" ? 5000 : agent === "qa" ? 1800 : agent === "designer" ? 1600 : 1400,
+        max_completion_tokens: agent === "developer" ? 12000 : agent === "qa" ? 2200 : agent === "designer" ? 1800 : 1600,
         messages: [
           { role: "system", content: prompts[agent] + (agent === "developer" ? " Jangan tambahkan teks di luar JSON. Utamakan ringkas tetapi lengkap." : " Jawab dalam bahasa Indonesia. Utamakan hasil konkret dan ringkas; jangan mengulang instruksi atau memberi pembukaan panjang.") },
           { role: "user", content: `PROJECT:
@@ -144,9 +144,18 @@ ${context}
     let parsedProject: any = null;
     if (agent === "developer") {
       try {
-        parsedProject = JSON.parse(artifact);
+        const cleaned = artifact.replace(/^\\s*\`\`\`(?:json)?\\s*/i, "").replace(/\\s*\`\`\`\\s*$/i, "").trim();
+        try {
+          parsedProject = JSON.parse(cleaned);
+        } catch {
+          const start = cleaned.indexOf("{");
+          const end = cleaned.lastIndexOf("}");
+          if (start >= 0 && end > start) parsedProject = JSON.parse(cleaned.slice(start, end + 1));
+          else throw new Error("Developer JSON tidak ditemukan");
+        }
         if (!Array.isArray(parsedProject.files)) throw new Error("Developer files missing");
         parsedProject.files = parsedProject.files.filter((f: any) => f && typeof f.path === "string" && typeof f.content === "string").slice(0, 40);
+        if (!parsedProject.files.length) throw new Error("Developer files kosong");
         normalizedArtifact = JSON.stringify(parsedProject);
       } catch {
         parsedProject = null;
