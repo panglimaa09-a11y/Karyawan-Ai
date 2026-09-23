@@ -82,3 +82,9 @@ button,textarea{font:inherit}
 .artifact-grid{display:grid;gap:12px}.result-card{border:1px solid #253142;background:#0e141d;border-radius:14px;padding:15px}.result-top{display:flex;justify-content:space-between;align-items:center;font-size:10px}.result-top span{text-transform:uppercase}.result-top .done{color:#54e39a}.result-top .working{color:#f0b45c}.result-top .error{color:#ff7b88}.result-card h3{font-size:14px;margin:8px 0}.result-card pre,.preview-card pre{white-space:pre-wrap;overflow:auto;color:#b8c3d1;font-size:11px;line-height:1.6;background:#080c12;border:1px solid #202a38;border-radius:10px;padding:14px;max-height:430px}
 .preview-card{border:1px solid #253142;background:#0e141d;border-radius:14px;padding:14px}.preview-bar{display:flex;justify-content:space-between;font-size:10px;color:#8995a5;margin-bottom:10px}.activity-list{display:grid;gap:8px}.activity-list div{border:1px solid #253142;background:#0e141d;border-radius:10px;padding:12px;font-size:11px;color:#b8c3d1}
 @media(max-width:900px){.workspace-overlay{padding:8px}.workspace{height:calc(100% - 16px);border-radius:16px}.workspace-head{padding:15px}.workspace-head h2{font-size:17px}.workspace-body{padding:12px}.workspace-grid{grid-template-columns:1fr}.workspace-card.hero{grid-column:auto}.workspace-card strong{font-size:22px}}
+
+.side-item small{display:block;color:#667386;font-size:9px;margin-top:6px;line-height:1.45}
+.side-action{margin-top:9px;width:100%;border:1px solid #2a3748;background:#151d29;color:#dce5ef;border-radius:8px;padding:7px;font-size:10px;cursor:pointer}
+.side-warning{margin-top:12px;border:1px solid #4b3d24;background:#19150d;color:#c9b486;border-radius:10px;padding:10px;font-size:9px;line-height:1.5}
+.field-label{display:block;color:#8995a5;font-size:9px;margin:12px 0 5px}
+.side-input{width:100%;border:1px solid #293445;background:#080c12;color:#e9eef5;border-radius:9px;padding:9px;font-size:10px;outline:none}
