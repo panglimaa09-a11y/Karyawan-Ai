@@ -362,6 +362,60 @@ Buat hasil baru yang lebih ringkas dan valid.`;
   };
 
   const selectedAgent = agents.find((a) => a.id === selected)!;
+  const developerArtifact = artifacts.find((a) => a.agent === "developer" && a.status === "done" && a.files?.length);
+  const projectFiles = developerArtifact?.files || [];
+  const [previewHtml, setPreviewHtml] = useState("");
+
+  useEffect(() => {
+    if (!projectFiles.length) { setPreviewHtml(""); return; }
+    const byPath = new Map(projectFiles.map((f) => [f.path.replace(/^\.\//, ""), f.content]));
+    const htmlFile = byPath.get("index.html") || projectFiles.find((f) => /\\.html$/i.test(f.path))?.content;
+    if (!htmlFile) { setPreviewHtml(""); return; }
+    let html = htmlFile;
+    html = html.replace(/<link[^>]+href=["']([^"']+)["'][^>]*>/gi, (tag, href) => {
+      const css = byPath.get(String(href).replace(/^\.\//, ""));
+      return css != null ? \`<style>\\n${css}\\n</style>\` : tag;
+    });
+    html = html.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\\/script>/gi, (tag, src) => {
+      const js = byPath.get(String(src).replace(/^\.\//, ""));
+      return js != null ? \`<script>\\n${js}\\n<\\/script>\` : tag;
+    });
+    setPreviewHtml(html);
+  }, [developerArtifact]);
+
+  const downloadProjectZip = () => {
+    if (!projectFiles.length) return;
+    const crcTable = (() => {
+      const table = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1); table[n] = c >>> 0; }
+      return table;
+    })();
+    const crc32 = (bytes: Uint8Array) => { let c = 0xffffffff; for (const b of bytes) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const chunks: Uint8Array[] = [];
+    const central: Uint8Array[] = [];
+    let offset = 0;
+    const enc = new TextEncoder();
+    const u16 = (v: number) => { const a = new Uint8Array(2); new DataView(a.buffer).setUint16(0, v, true); return a; };
+    const u32 = (v: number) => { const a = new Uint8Array(4); new DataView(a.buffer).setUint32(0, v >>> 0, true); return a; };
+    const join = (...parts: Uint8Array[]) => { const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let p = 0; for (const part of parts) { out.set(part, p); p += part.length; } return out; };
+    for (const file of projectFiles) {
+      const name = enc.encode(file.path.replace(/^\\/+/, ""));
+      const data = enc.encode(file.content);
+      const crc = crc32(data);
+      const local = join(u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0), name, data);
+      chunks.push(local);
+      const entry = join(u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), name);
+      central.push(entry); offset += local.length;
+    }
+    const centralSize = central.reduce((n, p) => n + p.length, 0);
+    const centralOffset = offset;
+    const end = join(u32(0x06054b50), u16(0), u16(0), u16(projectFiles.length), u16(projectFiles.length), u32(centralSize), u32(centralOffset), u16(0));
+    const zip = join(...chunks, ...central, end);
+    const blob = new Blob([zip], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "ai-office-project.zip"; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const sidebarContent = sidebar === "history" ? (
     <>
@@ -428,8 +482,8 @@ Buat hasil baru yang lebih ringkas dan valid.`;
       </nav>
       <div className="workspace-body">
         {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
-        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3><pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.files?.length ? <div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div> : null}{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
-        {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI WORK RESULT</span><span>{running ? "BUILDING" : "READY"}</span></div><pre>{artifact || "Preview akan tersedia setelah workflow berjalan."}</pre></div>}
+        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3>{a.agent === "developer" && a.files?.length ? <><div className="workspace-actions"><button className="primary" onClick={() => setWorkspaceTab("preview")}>▶ Preview Project</button><button className="side-action" onClick={downloadProjectZip}>📦 Download ZIP</button></div><div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div></> : null}<pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
+        {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI PROJECT PREVIEW</span><span>{previewHtml ? "READY" : "NO BUILD"}</span></div>{previewHtml ? <iframe title="AI project preview" sandbox="allow-scripts" srcDoc={previewHtml} style={{width:"100%",minHeight:520,border:0,borderRadius:14,background:"#fff"}} /> : <div className="side-empty">Belum ada index.html dari Andi. Jalankan project sampai Developer selesai menghasilkan file.</div>}</div>}
         {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
       </div>
     </>
