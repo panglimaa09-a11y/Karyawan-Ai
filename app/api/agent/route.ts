@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type AgentId = "designer" | "developer" | "writer" | "qa";
 
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     let response: Response | null = null;
     let data: any = null;
     let lastError = "Agent AI gagal mengerjakan task.";
-    for (let attempt = 1; attempt <= 4; attempt++) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_tokens: 3500,
+        max_tokens: agent === "developer" ? 3000 : agent === "qa" ? 1800 : 1600,
         messages: [
           { role: "system", content: prompts[agent] + " Jawab dalam bahasa Indonesia. Berikan output terstruktur dengan heading dan artefak yang jelas." },
           { role: "user", content: `PROJECT:
@@ -82,16 +82,16 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
         }
         if (response.ok && responseText && Object.keys(data).length) break;
         lastError = data?.error?.message || lastError || `Agent AI mengembalikan HTTP ${response.status}.`;
-        if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 4) {
+        if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 2) {
           return NextResponse.json({ error: lastError, status: response.status, agent }, { status: response.status });
         }
       } catch (err) {
         lastError = err instanceof Error ? err.message : "Koneksi ke provider AI gagal.";
-        if (attempt === 4) {
+        if (attempt === 2) {
           return NextResponse.json({ error: lastError, agent }, { status: 502 });
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
     }
 
     if (!response?.ok || !data) {
