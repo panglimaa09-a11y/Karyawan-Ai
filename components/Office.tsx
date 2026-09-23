@@ -22,7 +22,8 @@ type ResourceRequest = { id: string; from: string; request: string; reason: stri
 type DeliveryConfig = { repoUrl: string; branch: string; };
 type SavedProject = { project: string; history: ProjectHistory[]; plan: ManagerPlan | null; artifacts: Artifact[]; artifact: string; aiModel: string; tokenUsage: TokenUsage; requests: ResourceRequest[]; delivery: DeliveryConfig };
 type TokenUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
-type Artifact = { agent: "designer" | "developer" | "writer" | "qa"; title: string; content: string; model?: string; usage?: TokenUsage; status: "working" | "done" | "error" };
+type ProjectFile = { path: string; content: string };
+type Artifact = { agent: "designer" | "developer" | "writer" | "qa"; title: string; content: string; files?: ProjectFile[]; model?: string; usage?: TokenUsage; status: "working" | "done" | "error" };
 
 type ManagerPlan = {
   summary: string;
@@ -201,35 +202,59 @@ export default function Office() {
       ].slice(0, 12));
       updateAgent("manager", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
       const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
-      const sequence: Array<"designer" | "writer" | "developer" | "qa"> = ["designer", "writer", "developer", "qa"];
-      const jobs = sequence.map(async (id) => {
+      const parallelAgents: Array<"designer" | "writer" | "developer"> = ["designer", "writer", "developer"];
+      const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
+      
+      const runEmployee = async (id: "designer" | "writer" | "developer" | "qa", context = "") => {
         const task = byAgent.get(id);
         if (!task) return;
         setSelected(id);
         updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 15, task: task.task });
-        setArtifacts((items) => [...items, { agent: id, title: task.deliverable, content: "", status: "working" }]);
+        setArtifacts((items) => [...items.filter((a) => a.agent !== id), { agent: id, title: task.deliverable, content: "", status: "working" }]);
         try {
           const agentRes = await fetch("/api/agent", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable })
+            body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable, context })
           });
           const agentData = await readApiResponse(agentRes);
           if (Array.isArray(agentData.requests) && agentData.requests.length) {
             setRequests((items) => [...items, ...agentData.requests].slice(-20));
           }
+          let files: ProjectFile[] | undefined;
+          if (id === "developer") {
+            try {
+              const parsed = JSON.parse(agentData.artifact);
+              if (Array.isArray(parsed.files)) files = parsed.files.filter((f: any) => f?.path && typeof f.content === "string");
+            } catch { /* keep raw artifact if provider did not return valid JSON */ }
+          }
           setArtifacts((items) => items.map((a) => a.agent === id
-            ? { ...a, content: agentData.artifact || "Agent tidak mengembalikan artifact.", model: agentData.model, usage: agentData.usage, status: "done" }
+            ? { ...a, content: agentData.artifact || "Agent tidak mengembalikan artifact.", files, model: agentData.model, usage: agentData.usage, status: "done" }
             : a
           ));
-          updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: "Artifact selesai" });
+          updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: id === "qa" ? "QA selesai" : "Artifact selesai" });
+          return { ...agentData, files };
         } catch (agentError) {
           const message = agentError instanceof Error ? agentError.message : "Agent gagal.";
           setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: message, status: "error" } : a));
           updateAgent(id, { progress: 100, status: "idle", task: `Gagal: ${message.slice(0, 140)}` });
+          return null;
         }
-      });
-      await Promise.all(jobs);
+      };
+
+      await Promise.all(parallelAgents.map((id) => runEmployee(id)));
+
+      const developerArtifact = artifacts.find((a) => a.agent === "developer");
+      const contextForQa = [
+        "SINTA DESIGN:",
+        artifacts.find((a) => a.agent === "designer")?.content || "Belum tersedia.",
+        "\nDINA COPY:",
+        artifacts.find((a) => a.agent === "writer")?.content || "Belum tersedia.",
+        "\nANDI PROJECT FILES:",
+        developerArtifact?.files?.map((f) => `FILE: ${f.path}\n${f.content}`).join("\n\n") || developerArtifact?.content || "Belum tersedia."
+      ].join("\n");
+      await runEmployee("qa", contextForQa);
+
       setWorkspaceTab("artifacts");
       setArtifact(`PROJECT: ${prompt.trim()}
 
@@ -338,7 +363,7 @@ Buat hasil baru yang lebih ringkas dan valid.`;
       </nav>
       <div className="workspace-body">
         {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
-        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3><pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
+        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3><pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.files?.length ? <div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div> : null}{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
         {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI WORK RESULT</span><span>{running ? "BUILDING" : "READY"}</span></div><pre>{artifact || "Preview akan tersedia setelah workflow berjalan."}</pre></div>}
         {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
       </div>
