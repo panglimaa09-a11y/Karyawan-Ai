@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 type AgentId = "designer" | "developer" | "writer" | "qa";
 
@@ -57,6 +57,9 @@ export async function POST(req: Request) {
     let lastError = "Agent AI gagal mengerjakan task.";
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 90000);
+        try {
         response = await fetch(baseUrl + "/chat/completions", {
       method: "POST",
       headers: {
@@ -66,7 +69,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_completion_tokens: agent === "developer" ? 5000 : agent === "qa" ? 2600 : 3000,
+        max_completion_tokens: agent === "developer" ? 3500 : agent === "qa" ? 1800 : 2200,
         messages: [
           { role: "system", content: prompts[agent] + (agent === "developer" ? " Jangan tambahkan teks di luar JSON. Utamakan ringkas tetapi lengkap." : " Jawab dalam bahasa Indonesia. Utamakan hasil konkret dan ringkas; jangan mengulang instruksi atau memberi pembukaan panjang.") },
           { role: "user", content: `PROJECT:
@@ -102,7 +105,7 @@ ${context}
           return NextResponse.json({ error: lastError, status: response.status, agent }, { status: response.status });
         }
       } catch (err) {
-        lastError = err instanceof Error ? err.message : "Koneksi ke provider AI gagal.";
+        lastError = err instanceof Error && err.name === "AbortError" ? "Provider AI timeout setelah 90 detik." : err instanceof Error ? err.message : "Koneksi ke provider AI gagal.";
         if (attempt === 2) {
           return NextResponse.json({ error: lastError, agent }, { status: 502 });
         }
