@@ -7,7 +7,7 @@ export const maxDuration = 300;
 type Plan = {
   summary: string;
   tasks: Array<{
-    agent: "designer" | "developer" | "writer" | "qa";
+    agent: string;
     task: string;
     deliverable: string;
   }>;
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
           {
             role: "system",
             content:
-              "You are Raka, the Project Manager of an AI software team. Analyze the user's project and create an actionable execution plan. Return ONLY valid JSON with this shape: {summary:string,tasks:[{agent:'designer'|'developer'|'writer'|'qa',task:string,deliverable:string}]} . Create exactly 4 tasks, one for each agent. Be concrete and practical. Do not invent access to external systems."
+              "You are Raka, the Project Manager of an AI software team. Analyze the user's project and create an actionable execution plan. Return ONLY valid JSON with this shape: {summary:string,tasks:[{agent:'designer'|'developer'|'writer'|'qa',task:string,deliverable:string}]} . Create exactly 21 tasks, one for each agent: analyst, strategist, designer, visual, writer, frontend, backend, database, security, ai, api, qa, reviewer, devops, cloud, mobile, seo, marketing, finance, docs, support. Be concrete and practical. Tasks may run in parallel unless a dependency is explicitly stated. Do not invent access to external systems."
           },
           { role: "user", content: projectText }
         ]
@@ -153,12 +153,12 @@ export async function POST(request: Request) {
     if (!raw) throw new Error("Manager returned an empty response.");
     const plan = parseManagerPlan(raw);
 
-    const allowed = new Set(["designer", "developer", "writer", "qa"]);
+    const allowed = new Set(["analyst","strategist","designer","visual","writer","frontend","backend","database","security","ai","api","qa","reviewer","devops","cloud","mobile","seo","marketing","finance","docs","support"]);
     plan.tasks = Array.isArray(plan.tasks)
       ? plan.tasks.filter((t) => allowed.has(t.agent)).slice(0, 4)
       : [];
 
-    if (!plan.summary || plan.tasks.length !== 4) {
+    if (!plan.summary || plan.tasks.length !== 21) {
       throw new Error("Manager plan is incomplete.");
     }
 
