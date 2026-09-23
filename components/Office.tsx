@@ -223,7 +223,7 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
       <div className="token-row"><span>Output</span><b>{tokenUsage?.completion_tokens ?? "—"}</b></div>
       <div className="side-empty">Data berasal dari respons provider AI.</div>
     </>
-  ) : (
+  ) : sidebar === "ai" ? (
     <>
       <div className="side-title">AI yang Dipakai</div>
       <div className="ai-card"><div className="ai-dot" /><div><b>{aiModel}</b><span>Project Manager · Raka</span></div></div>
@@ -257,7 +257,7 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
       </div>
       <button className="primary" onClick={() => setWorkspaceOpen(true)}>Buka Workspace →</button>
     </>
-  );
+  ) : null;
 
   return (
     <main className="office-shell">
