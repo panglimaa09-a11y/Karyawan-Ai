@@ -66,6 +66,7 @@ export async function POST(req: Request) {
         "Content-Type": "application/json",
         Authorization: "Bearer " + apiKey
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model,
         temperature: 0.4,
@@ -88,6 +89,9 @@ ${context}
         ]
       })
     });
+        } finally {
+          clearTimeout(timeout);
+        }
 
         const responseText = await response.text();
         try {
