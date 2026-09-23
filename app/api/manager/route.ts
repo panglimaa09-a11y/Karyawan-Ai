@@ -73,7 +73,16 @@ export async function POST(request: Request) {
       })
     });
 
-    const data = await response.json();
+    const responseText = await response.text();
+    let data: any = {};
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      return NextResponse.json(
+        { error: responseText?.slice(0, 500) || `AI provider returned non-JSON response (HTTP ${response.status}).` },
+        { status: 502 }
+      );
+    }
 
     if (!response.ok) {
       return NextResponse.json(
