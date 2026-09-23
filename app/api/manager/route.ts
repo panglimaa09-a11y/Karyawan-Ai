@@ -36,9 +36,9 @@ export async function POST(request: Request) {
 
     // Provider-agnostic configuration. For 9router, use a reachable
     // OpenAI-compatible URL such as https://YOUR-GATEWAY/v1.
-    const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
+    const baseUrl = (process.env.AI_BASE_URL || "https://api.atria-asi.ai/v1").replace(/\/$/, "");
     const apiKey = process.env.AI_API_KEY || "";
-    const model = process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
+    const model = process.env.AI_MODEL || "Atria-Dawn-Preview";
 
     if (!baseUrl) {
       return NextResponse.json(
