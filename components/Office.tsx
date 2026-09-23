@@ -120,6 +120,7 @@ export default function Office() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "artifacts" | "preview" | "activity">("overview");
+  const [retryingAgent, setRetryingAgent] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -203,6 +204,36 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
     } finally { setRunning(false); }
   };
 
+  const retryAgent = async (id: "designer" | "developer" | "writer" | "qa") => {
+    const task = plan?.tasks.find((t) => t.agent === id);
+    const current = artifacts.find((a) => a.agent === id);
+    if (!task || retryingAgent) return;
+    setRetryingAgent(id);
+    setSelected(id);
+    updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 15, task: "Memperbaiki pekerjaan yang gagal..." });
+    setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: "", status: "working" } : a));
+    try {
+      const repairTask = `${task.task}
+
+PERBAIKI ULANG PEKERJAAN SEBELUMNYA.
+Error sebelumnya: ${current?.content || "Tidak ada detail error."}
+Buat hasil baru yang lebih ringkas dan valid.`;
+      const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: repairTask, deliverable: task.deliverable }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `${id} gagal diperbaiki.`);
+      if (Array.isArray(data.requests) && data.requests.length) setRequests((items) => [...items, ...data.requests].slice(-20));
+      setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: data.artifact || "Agent tidak mengembalikan artifact.", model: data.model, usage: data.usage, status: "done" } : a));
+      updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: "Perbaikan selesai" });
+      setWorkspaceTab("artifacts");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Agent gagal diperbaiki.";
+      setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: message, status: "error" } : a));
+      updateAgent(id, { progress: 100, status: "idle", task: `Gagal: ${message.slice(0, 140)}` });
+    } finally {
+      setRetryingAgent(null);
+    }
+  };
+
   const selectedAgent = agents.find((a) => a.id === selected)!;
 
   const sidebarContent = sidebar === "history" ? (
@@ -255,7 +286,7 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
       </nav>
       <div className="workspace-body">
         {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
-        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3><pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre></article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
+        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3><pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
         {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI WORK RESULT</span><span>{running ? "BUILDING" : "READY"}</span></div><pre>{artifact || "Preview akan tersedia setelah workflow berjalan."}</pre></div>}
         {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
       </div>
@@ -268,10 +299,11 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
       <label className="field-label">Branch</label>
       <input className="side-input" value={delivery.branch} onChange={e => setDelivery(d => ({ ...d, branch: e.target.value }))} placeholder="main" />
       <div className="side-item">
-        <b>📦 Output</b>
-        <span>Artifact Developer saat ini masih berupa hasil kode/text. Tahap berikutnya kita ubah menjadi file tree → ZIP → repository.</span>
+        <b>📦 Perintah Delivery</b>
+        <span>Setelah Andi menghasilkan file project, kamu bisa memberi perintah: “Push project ini ke repository yang saya berikan.”</span>
       </div>
-      <button className="primary" onClick={() => { setWorkspaceOpen(true); setSidebar("workspace"); }}>Buka Workspace →</button>
+      <div className="side-warning">Push otomatis membutuhkan koneksi GitHub yang aman di server. Jangan memasukkan GitHub token ke kolom ini.</div>
+      <button className="primary" onClick={() => { setSidebar("workspace"); setWorkspaceOpen(true); setWorkspaceTab("artifacts"); }}>Lihat File / Artifact →</button>
     </>
   ) : null;
 
