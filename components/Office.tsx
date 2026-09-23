@@ -107,7 +107,7 @@ export default function Office() {
       setPlan(data.plan);
       updateAgent("manager", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
 
-      const byAgent = new Map(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
+      const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
       const sequence: Array<"designer" | "writer" | "developer" | "qa"> = ["designer", "writer", "developer", "qa"];
 
       for (const id of sequence) {
