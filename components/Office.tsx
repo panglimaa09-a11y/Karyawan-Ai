@@ -23,12 +23,12 @@ type DeliveryConfig = { repoUrl: string; branch: string; };
 type SavedProject = { project: string; history: ProjectHistory[]; plan: ManagerPlan | null; artifacts: Artifact[]; artifact: string; aiModel: string; tokenUsage: TokenUsage; requests: ResourceRequest[]; delivery: DeliveryConfig };
 type TokenUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
 type ProjectFile = { path: string; content: string };
-type Artifact = { agent: "designer" | "developer" | "writer" | "qa"; title: string; content: string; files?: ProjectFile[]; model?: string; usage?: TokenUsage; status: "working" | "done" | "error" };
+type Artifact = { agent: string; title: string; content: string; files?: ProjectFile[]; model?: string; usage?: TokenUsage; status: "working" | "done" | "error" };
 
 type ManagerPlan = {
   summary: string;
   tasks: Array<{
-    agent: "designer" | "developer" | "writer" | "qa";
+    agent: string;
     task: string;
     deliverable: string;
   }>;
@@ -170,7 +170,7 @@ export default function Office() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(null);
   const [aiModel, setAiModel] = useState("—");
   const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [modelConfig, setModelConfig] = useState<Record<string, string>>({ manager: "", designer: "", developer: "", writer: "", qa: "" });
+  const [modelConfig, setModelConfig] = useState<Record<string, string>>({ manager: "", ...Object.fromEntries(initialAgents.filter((a) => a.id !== "manager").map((a) => [a.id, ""])) });
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState("");
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
@@ -264,11 +264,11 @@ export default function Office() {
         ...items
       ].slice(0, 12));
       updateAgent("manager", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
-      const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
-      const parallelAgents: Array<"designer" | "writer" | "developer"> = ["designer", "writer", "developer"];
+      const byAgent = new Map<string, ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
+      const parallelAgents = initialAgents.filter((a) => a.id !== "manager" && a.id !== "qa").map((a) => a.id);
 
       
-      const runEmployee = async (id: "designer" | "writer" | "developer" | "qa", context = "") => {
+      const runEmployee = async (id: string, context = "") => {
         const task = byAgent.get(id);
         if (!task) return;
         setSelected(id);
@@ -302,22 +302,18 @@ export default function Office() {
       };
 
       const employeeResults: Array<any> = [];
-      for (const id of parallelAgents) {
-        employeeResults.push(await runEmployee(id));
+      const batchSize = 6;
+      for (let i = 0; i < parallelAgents.length; i += batchSize) {
+        const batch = parallelAgents.slice(i, i + batchSize);
+        const results = await Promise.all(batch.map((id) => runEmployee(id)));
+        employeeResults.push(...results);
       }
       const resultByAgent = new Map(parallelAgents.map((id, index) => [id, employeeResults[index]]));
-      const developerResult = resultByAgent.get("developer");
-      const designerResult = resultByAgent.get("designer");
-      const writerResult = resultByAgent.get("writer");
-      const developerFiles = developerResult?.files?.map((f: ProjectFile) => `FILE: ${f.path}\n${f.content}`).join("\n\n") || developerResult?.artifact || "Belum tersedia.";
-      const contextForQa = [
-        "SINTA DESIGN:",
-        designerResult?.artifact || "Belum tersedia.",
-        "\nDINA COPY:",
-        writerResult?.artifact || "Belum tersedia.",
-        "\nANDI PROJECT FILES:",
-        developerFiles
-      ].join("\n");
+      const contextForQa = Array.from(resultByAgent.entries())
+        .filter(([, result]) => result)
+        .map(([id, result]) => `[${id}]\n${String(result.artifact || "").slice(0, 1800)}`)
+        .join("\n\n")
+        .slice(0, 12000);
       await runEmployee("qa", contextForQa);
 
       setWorkspaceTab("artifacts");
@@ -347,7 +343,7 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
     return data;
   }
 
-  const retryAgent = async (id: "designer" | "developer" | "writer" | "qa") => {
+  const retryAgent = async (id: string) => {
     const task = plan?.tasks.find((t) => t.agent === id);
     const current = artifacts.find((a) => a.agent === id);
     if (!task || retryingAgent) return;
@@ -380,7 +376,7 @@ Buat hasil baru yang lebih ringkas dan valid.`;
   };
 
   const selectedAgent = agents.find((a) => a.id === selected)!;
-  const developerArtifact = artifacts.find((a) => a.agent === "developer" && a.status === "done" && a.files?.length);
+  const developerArtifact = artifacts.find((a) => a.agent === "frontend" && a.status === "done" && a.files?.length);
   const projectFiles = developerArtifact?.files || [];
   const [previewHtml, setPreviewHtml] = useState("");
 
@@ -490,20 +486,16 @@ ${js}
     <>
       <div className="side-title">AI Model / 9Router</div>
       <div className="side-empty">{modelLoading ? "Mengambil daftar model dari 9Router..." : availableModels.length ? `${availableModels.length} model tersedia dari 9Router.` : (modelError || "Belum ada model.")}</div>
-      {([
-        ["manager", "Raka", "Project Manager"],
-        ["designer", "Sinta", "Designer"],
-        ["developer", "Andi", "Developer"],
-        ["writer", "Dina", "Writer"],
-        ["qa", "Bima", "QA"]
-      ] as const).map(([id, name, role]) => (
-        <label className="field-label" key={id}>{name} · {role}
-          <select className="side-input" value={modelConfig[id] || ""} onChange={(e) => setModelConfig((x) => ({ ...x, [id]: e.target.value }))} disabled={!availableModels.length}>
+      {agents.map((a) => (
+        <label className="field-label" key={a.id}>{a.emoji} {a.name} · {a.role}
+          <select className="side-input" value={modelConfig[a.id] || ""} onChange={(e) => setModelConfig((x) => ({ ...x, [a.id]: e.target.value }))} disabled={!availableModels.length || a.id === "manager"}>
             <option value="">Pilih model</option>
             {availableModels.map((model) => <option value={model} key={model}>{model}</option>)}
           </select>
         </label>
-      ))}
+      ))
+        <label className="field-label" key={id}>{name} · {role}
+
       <button className="primary" onClick={() => localStorage.setItem("ai-office-model-config", JSON.stringify(modelConfig))}>Simpan konfigurasi model</button>
       <div className="side-warning">Daftar model dibaca langsung dari endpoint /v1/models milik 9Router. Nama model yang muncul mengikuti model yang benar-benar tersedia di gateway kamu.</div>
     </>
@@ -533,8 +525,8 @@ ${js}
       </nav>
       <div className="workspace-body">
         {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
-        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3>{a.agent === "developer" && a.files?.length ? <><div className="workspace-actions"><button className="primary" onClick={() => setWorkspaceTab("preview")}>▶ Preview Project</button><button className="side-action" onClick={downloadProjectZip}>📦 Download ZIP</button><button className="primary" disabled={!delivery.repoUrl.trim() || pushState === "pushing"} onClick={() => setPushState("confirm")}>🚀 Push ke GitHub</button></div><div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div></> : null}<pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
-        {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI PROJECT PREVIEW</span><span>{previewHtml ? "READY" : "NO BUILD"}</span></div>{previewHtml ? <iframe title="AI project preview" sandbox="allow-scripts" srcDoc={previewHtml} style={{width:"100%",minHeight:520,border:0,borderRadius:14,background:"#fff"}} /> : <div className="side-empty">Belum ada index.html dari Andi. Jalankan project sampai Developer selesai menghasilkan file.</div>}</div>}
+        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3>{a.agent === "frontend" && a.files?.length ? <><div className="workspace-actions"><button className="primary" onClick={() => setWorkspaceTab("preview")}>▶ Preview Project</button><button className="side-action" onClick={downloadProjectZip}>📦 Download ZIP</button><button className="primary" disabled={!delivery.repoUrl.trim() || pushState === "pushing"} onClick={() => setPushState("confirm")}>🚀 Push ke GitHub</button></div><div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div></> : null}<pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
+        {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI PROJECT PREVIEW</span><span>{previewHtml ? "READY" : "NO BUILD"}</span></div>{previewHtml ? <iframe title="AI project preview" sandbox="allow-scripts" srcDoc={previewHtml} style={{width:"100%",minHeight:520,border:0,borderRadius:14,background:"#fff"}} /> : <div className="side-empty">Belum ada index.html dari Andi. Jalankan project sampai Frontend Developer selesai menghasilkan file.</div>}</div>}
         {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
       </div>
     </>
