@@ -66,9 +66,9 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        max_completion_tokens: agent === "developer" ? 3000 : agent === "qa" ? 1800 : 1600,
+        max_completion_tokens: agent === "developer" ? 5000 : agent === "qa" ? 2600 : 3000,
         messages: [
-          { role: "system", content: prompts[agent] + (agent === "developer" ? " Jangan tambahkan teks di luar JSON." : " Jawab dalam bahasa Indonesia. Berikan output terstruktur dengan heading dan artefak yang jelas.") },
+          { role: "system", content: prompts[agent] + (agent === "developer" ? " Jangan tambahkan teks di luar JSON. Utamakan ringkas tetapi lengkap." : " Jawab dalam bahasa Indonesia. Utamakan hasil konkret dan ringkas; jangan mengulang instruksi atau memberi pembukaan panjang.") },
           { role: "user", content: `PROJECT:
 ${project}
 
