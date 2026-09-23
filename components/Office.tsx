@@ -203,7 +203,7 @@ export default function Office() {
       updateAgent("manager", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
       const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
       const parallelAgents: Array<"designer" | "writer" | "developer"> = ["designer", "writer", "developer"];
-      const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
+
       
       const runEmployee = async (id: "designer" | "writer" | "developer" | "qa", context = "") => {
         const task = byAgent.get(id);
