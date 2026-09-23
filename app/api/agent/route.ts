@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 type AgentId = "designer" | "developer" | "writer" | "qa";
 
 const prompts: Record<AgentId, string> = {
@@ -75,7 +78,7 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
         }
       } catch (err) {
         lastError = err instanceof Error ? err.message : "Koneksi ke provider AI gagal.";
-        if (attempt === 3) {
+        if (attempt === 4) {
           return NextResponse.json({ error: lastError, agent }, { status: 502 });
         }
       }
