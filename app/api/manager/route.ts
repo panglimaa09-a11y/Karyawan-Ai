@@ -14,6 +14,9 @@ type Plan = {
 function extractText(data: any): string {
   if (typeof data?.output_text === "string") return data.output_text;
 
+  const choice = data?.choices?.[0];
+  if (typeof choice?.message?.content === "string") return choice.message.content;
+
   const parts: string[] = [];
   for (const item of data?.output ?? []) {
     for (const content of item?.content ?? []) {
@@ -31,53 +34,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Project description is required." }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+    // Provider-agnostic configuration. For 9router, use a reachable
+    // OpenAI-compatible URL such as https://YOUR-GATEWAY/v1.
+    const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
+    const apiKey = process.env.AI_API_KEY || "";
+    const model = process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
+
+    if (!baseUrl) {
       return NextResponse.json(
         {
           error:
-            "OPENAI_API_KEY belum dipasang di Vercel. Tambahkan sebagai Environment Variable lalu redeploy.",
-          setupRequired: true,
+            "AI_BASE_URL belum dipasang di Vercel. 9router yang berjalan di localhost tidak bisa diakses langsung oleh Vercel.",
+          setupRequired: true
         },
         { status: 503 }
       );
     }
 
-    const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
-
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
       },
       body: JSON.stringify({
         model,
-        input: [
+        temperature: 0.2,
+        messages: [
           {
             role: "system",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "You are Raka, the Project Manager of an AI software team. Analyze the user's project and create an actionable execution plan. Return ONLY valid JSON with this shape: {summary:string,tasks:[{agent:'designer'|'developer'|'writer'|'qa',task:string,deliverable:string}]} . Create exactly 4 tasks, one for each agent. Be concrete and practical. Do not invent access to external systems.",
-              },
-            ],
+            content:
+              "You are Raka, the Project Manager of an AI software team. Analyze the user's project and create an actionable execution plan. Return ONLY valid JSON with this shape: {summary:string,tasks:[{agent:'designer'|'developer'|'writer'|'qa',task:string,deliverable:string}]} . Create exactly 4 tasks, one for each agent. Be concrete and practical. Do not invent access to external systems."
           },
-          {
-            role: "user",
-            content: [{ type: "input_text", text: project.trim() }],
-          },
-        ],
-        max_output_tokens: 1400,
-      }),
+          { role: "user", content: project.trim() }
+        ]
+      })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: data?.error?.message || "OpenAI request failed." },
+        { error: data?.error?.message || `AI gateway returned HTTP ${response.status}.` },
         { status: response.status }
       );
     }
@@ -93,12 +91,14 @@ export async function POST(request: Request) {
       plan = JSON.parse(fenced[0]);
     }
 
-    if (!plan.summary || !Array.isArray(plan.tasks)) {
+    const allowed = new Set(["designer", "developer", "writer", "qa"]);
+    plan.tasks = Array.isArray(plan.tasks)
+      ? plan.tasks.filter((t) => allowed.has(t.agent)).slice(0, 4)
+      : [];
+
+    if (!plan.summary || plan.tasks.length !== 4) {
       throw new Error("Manager plan is incomplete.");
     }
-
-    const allowed = new Set(["designer", "developer", "writer", "qa"]);
-    plan.tasks = plan.tasks.filter((t) => allowed.has(t.agent)).slice(0, 4);
 
     return NextResponse.json({ plan, model });
   } catch (error) {
