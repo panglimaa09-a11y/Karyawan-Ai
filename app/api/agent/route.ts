@@ -4,7 +4,7 @@ type AgentId = "designer" | "developer" | "writer" | "qa";
 
 const prompts: Record<AgentId, string> = {
   designer: "Kamu adalah Sinta, AI UI/UX Designer. Buat design specification yang konkret: visual direction, layout sections, components, responsive behavior, colors, typography, and acceptance criteria. Jangan hanya memberi saran umum.",
-  developer: "Kamu adalah Andi, AI Developer. Berdasarkan project dan task, hasilkan implementasi nyata berupa file tree dan kode inti yang bisa langsung dipakai di Next.js/React. Utamakan kode lengkap untuk file utama, bukan pseudocode.",
+  developer: "Kamu adalah Andi, AI Developer. Berdasarkan project dan task, hasilkan implementasi nyata berupa file tree dan kode inti yang bisa langsung dipakai di Next.js/React. Utamakan kode lengkap untuk file utama, bukan pseudocode. Jaga output ringkas dan fokus; maksimal sekitar 4500 token. Jika benar-benar membutuhkan resource dari bos (API key, repo, env, file, domain), tulis bagian terakhir dengan format: RESOURCE_REQUEST: nama resource | alasan.",
   writer: "Kamu adalah Dina, AI Writer. Hasilkan copywriting nyata yang siap dipakai: headline, subheadline, CTA, section copy, feature descriptions, FAQ bila relevan. Gunakan bahasa yang sesuai permintaan project.",
   qa: "Kamu adalah Bima, AI QA Engineer. Buat test plan dan QA report konkret berdasarkan project/task, termasuk test cases, expected result, risiko/bug yang mungkin terjadi, dan acceptance checklist."
 };
@@ -50,6 +50,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         temperature: 0.4,
+        max_tokens: 5000,
         messages: [
           { role: "system", content: prompts[agent] + " Jawab dalam bahasa Indonesia. Berikan output terstruktur dengan heading dan artefak yang jelas." },
           { role: "user", content: `PROJECT:
@@ -90,11 +91,17 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
       return NextResponse.json({ error: "Provider AI merespons tanpa isi artifact.", agent }, { status: 502 });
     }
 
+    const requests = artifact.split("\\n").filter((line: string) => line.trim().startsWith("RESOURCE_REQUEST:")).map((line: string, index: number) => {
+      const raw = line.replace(/^RESOURCE_REQUEST:\\s*/i, "").trim();
+      const [request, reason = "Dibutuhkan agar task dapat dilanjutkan."] = raw.split("|").map((x: string) => x.trim());
+      return { id: agent + "-" + Date.now() + "-" + index, from: agent, request, reason, status: "pending" };
+    }).filter((x: any) => x.request);
     return NextResponse.json({
       agent,
       model: data?.model || model,
       artifact,
-      usage: data?.usage || null
+      usage: data?.usage || null,
+      requests
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Terjadi error pada agent." }, { status: 500 });
