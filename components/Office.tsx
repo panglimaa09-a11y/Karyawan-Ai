@@ -19,6 +19,7 @@ type Agent = {
 
 type ProjectHistory = { project: string; time: string; status: string };
 type TokenUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
+type Artifact = { agent: "designer" | "developer" | "writer" | "qa"; title: string; content: string; model?: string; usage?: TokenUsage; status: "working" | "done" | "error" };
 
 type ManagerPlan = {
   summary: string;
@@ -111,12 +112,15 @@ export default function Office() {
   const [history, setHistory] = useState<ProjectHistory[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(null);
   const [aiModel, setAiModel] = useState("Atria-Dawn-Preview");
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspaceTab, setWorkspaceTab] = useState<"overview" | "artifacts" | "preview" | "activity">("overview");
 
   const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
   const runProject = async () => {
     if (!prompt.trim() || running) return;
-    setRunning(true); setError(""); setPlan(null); setArtifact("");
+    setRunning(true); setError(""); setPlan(null); setArtifact(""); setArtifacts([]); setWorkspaceOpen(true); setWorkspaceTab("overview");
     setAgents((cur) => cur.map((x) => ({ ...x, status: x.id === "manager" ? "working" : "idle", progress: x.id === "manager" ? 10 : 0, task: x.id === "manager" ? "Raka sedang menganalisis proyek..." : "Menunggu Manager" })));
     try {
       const res = await fetch("/api/manager", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim() }) });
@@ -135,19 +139,28 @@ export default function Office() {
       for (const id of sequence) {
         const task = byAgent.get(id);
         if (!task) continue;
-        setSelected(id); updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 20, task: task.task });
-        await new Promise((r) => setTimeout(r, 700)); updateAgent(id, { progress: 65 });
-        await new Promise((r) => setTimeout(r, 700)); updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle" });
+        setSelected(id);
+        updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 15, task: task.task });
+        setArtifacts((items) => [...items, { agent: id, title: task.deliverable, content: "", status: "working" }]);
+        try {
+          const agentRes = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable }) });
+          const agentData = await agentRes.json();
+          if (!agentRes.ok) throw new Error(agentData.error || `${id} gagal mengerjakan task.`);
+          setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: agentData.artifact || "Agent tidak mengembalikan artifact.", model: agentData.model, usage: agentData.usage, status: "done" } : a));
+          updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: "Artifact selesai" });
+        } catch (agentError) {
+          const message = agentError instanceof Error ? agentError.message : "Agent gagal.";
+          setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: message, status: "error" } : a));
+          updateAgent(id, { progress: 100, status: "idle", task: "Gagal membuat artifact" });
+        }
       }
+      setWorkspaceTab("artifacts");
       setArtifact(`PROJECT: ${prompt.trim()}
 
 MANAGER SUMMARY:
 ${data.plan.summary}
 
-TASKS:
-${data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => `- ${t.agent.toUpperCase()}: ${t.task}\n  Deliverable: ${t.deliverable}`).join("\n")}
-
-STATUS: PLAN READY FOR EXECUTION
+STATUS: AI EMPLOYEES COMPLETED THEIR WORK
 `);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Terjadi error.";
@@ -197,6 +210,25 @@ STATUS: PLAN READY FOR EXECUTION
         <div className="hud"><div className="brand">AI OFFICE / LIVE AGENTS</div><div className="live"><i /> REAL AI MANAGER</div></div>
         <div className="canvas-wrap"><Canvas><color attach="background" args={["#0b1017"]} /><OfficeScene agents={agents} selected={selected} setSelected={setSelected} /></Canvas></div>
       </section>
+      {workspaceOpen && (
+        <div className="workspace-overlay">
+          <section className="workspace">
+            <header className="workspace-head"><div><div className="workspace-kicker">PROJECT WORKSPACE</div><h2>{prompt.trim() || "Project"}</h2><span>{running ? "AI employees sedang bekerja..." : "Workflow selesai — hasil siap ditinjau"}</span></div><button className="workspace-close" onClick={() => setWorkspaceOpen(false)}>×</button></header>
+            <nav className="workspace-tabs">
+              <button className={workspaceTab === "overview" ? "active" : ""} onClick={() => setWorkspaceTab("overview")}>Overview</button>
+              <button className={workspaceTab === "artifacts" ? "active" : ""} onClick={() => setWorkspaceTab("artifacts")}>Artifacts ({artifacts.filter(a => a.status === "done").length})</button>
+              <button className={workspaceTab === "preview" ? "active" : ""} onClick={() => setWorkspaceTab("preview")}>Preview</button>
+              <button className={workspaceTab === "activity" ? "active" : ""} onClick={() => setWorkspaceTab("activity")}>Activity</button>
+            </nav>
+            <div className="workspace-body">
+              {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>FINAL OUTPUT</span><strong>{running ? "Building..." : artifacts.length ? "Work completed" : "Planning..."}</strong><p>Raka membagi project ke empat AI employee. Setiap employee mengerjakan task dan menghasilkan artifact yang dapat kamu buka.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
+              {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3><pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre></article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
+              {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI WORK RESULT</span><span>{running ? "BUILDING" : "READY"}</span></div><pre>{artifact || "Preview akan tersedia setelah workflow berjalan."}</pre></div>}
+              {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
+            </div>
+          </section>
+        </div>
+      )}
       <aside className="panel">
         <h1>AI Office</h1>
         <div className="muted">Masukkan proyek. Raka akan membuat rencana kerja nyata untuk tim AI.</div>
