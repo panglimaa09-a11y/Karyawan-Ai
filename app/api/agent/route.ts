@@ -70,9 +70,18 @@ Kerjakan tugas ini sekarang. Output harus menjadi hasil kerja yang dapat ditinja
       })
     });
 
-        data = await response.json();
-        if (response.ok) break;
-        lastError = data?.error?.message || `Agent AI mengembalikan HTTP ${response.status}.`;
+        const responseText = await response.text();
+        try {
+          data = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          data = {};
+          lastError = responseText?.slice(0, 500) || `Provider mengembalikan respons non-JSON (HTTP ${response.status}).`;
+        }
+        if (response.ok && !responseText) {
+          lastError = "Provider AI mengembalikan respons kosong.";
+        }
+        if (response.ok && responseText && Object.keys(data).length) break;
+        lastError = data?.error?.message || lastError || `Agent AI mengembalikan HTTP ${response.status}.`;
         if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 4) {
           return NextResponse.json({ error: lastError, status: response.status, agent }, { status: response.status });
         }
