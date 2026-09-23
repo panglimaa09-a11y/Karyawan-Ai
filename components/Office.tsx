@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, Text } from "@react-three/drei";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import EmployeeAvatar from "./EmployeeAvatar";
 
@@ -50,7 +50,7 @@ const loungePositions: Record<string, [number, number, number]> = {
 };
 
 function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolean; onClick: () => void }) {
-  const ref = useMemo(() => new THREE.Group(), []);
+  const ref = useRef<THREE.Group>(null);
   const avatarColor: Record<string, string> = {
     manager: "#6c8cff",
     designer: "#d16cff",
@@ -65,24 +65,27 @@ function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolea
     : lounge;
 
   useFrame(({ clock }) => {
-    const dx = target[0] - ref.position.x;
-    const dz = target[2] - ref.position.z;
+    const group = ref.current;
+    if (!group) return;
+    const dx = target[0] - group.position.x;
+    const dz = target[2] - group.position.z;
     const distance = Math.hypot(dx, dz);
     const speed = agent.status === "working" || agent.status === "review" ? 0.075 : 0.055;
 
     if (distance > 0.02) {
-      ref.position.x += dx * speed;
-      ref.position.z += dz * speed;
+      group.position.x += dx * speed;
+      group.position.z += dz * speed;
     }
 
     const walking = distance > 0.16;
-    ref.position.y = agent.position[1] + (walking ? Math.sin(clock.elapsedTime * 10) * .035 : Math.sin(clock.elapsedTime * 2) * .008);
-    ref.rotation.y = Math.atan2(dx, dz);
+    group.position.y = agent.position[1] + (walking ? Math.sin(clock.elapsedTime * 10) * .035 : Math.sin(clock.elapsedTime * 2) * .008);
+    group.rotation.y = Math.atan2(dx, dz);
 
-    (ref.userData as { initialized?: boolean }).initialized = true;
+    (group.userData as { initialized?: boolean }).initialized = true;
   });
 
-  const atDesk = Math.hypot(ref.position.x - agent.position[0], ref.position.z - agent.position[2]) < .22;
+  const currentPosition = ref.current?.position;
+  const atDesk = currentPosition ? Math.hypot(currentPosition.x - agent.position[0], currentPosition.z - agent.position[2]) < .22 : false;
   const walking = !atDesk && agent.id !== "manager";
 
   return (
