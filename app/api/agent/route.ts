@@ -59,8 +59,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "AI_BASE_URL belum dipasang. Arahkan ke 9Router HTTPS yang dapat diakses Vercel; jangan gunakan 127.0.0.1/localhost." }, { status: 503 });
     }
     const configuredTimeoutMs = Number(process.env.AI_TIMEOUT_MS || 30000);
-    const timeoutMs = Math.min(30000, Math.max(10000, configuredTimeoutMs));
-    const maxRetries = Math.min(1, Math.max(0, Number(process.env.AI_MAX_RETRIES || 0)));
+    const timeoutMs = Math.min(120000, Math.max(15000, configuredTimeoutMs));
+    const maxRetries = Math.min(2, Math.max(0, Number(process.env.AI_MAX_RETRIES || 1)));
 
     let response: Response | null = null;
     let data: any = null;
