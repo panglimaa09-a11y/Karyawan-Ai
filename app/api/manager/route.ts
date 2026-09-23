@@ -155,7 +155,7 @@ export async function POST(request: Request) {
 
     const allowed = new Set(["analyst","strategist","designer","visual","writer","frontend","backend","database","security","ai","api","qa","reviewer","devops","cloud","mobile","seo","marketing","finance","docs","support"]);
     plan.tasks = Array.isArray(plan.tasks)
-      ? plan.tasks.filter((t) => allowed.has(t.agent)).slice(0, 4)
+      ? plan.tasks.filter((t) => allowed.has(t.agent)).slice(0, 21)
       : [];
 
     if (!plan.summary || plan.tasks.length !== 21) {
