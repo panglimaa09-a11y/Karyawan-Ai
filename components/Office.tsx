@@ -156,8 +156,7 @@ export default function Office() {
     setAgents((cur) => cur.map((x) => ({ ...x, status: x.id === "manager" ? "working" : "idle", progress: x.id === "manager" ? 10 : 0, task: x.id === "manager" ? "Raka sedang menganalisis proyek..." : "Menunggu Manager" })));
     try {
       const res = await fetch("/api/manager", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim() }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Manager gagal membuat rencana.");
+      const data = await readApiResponse(res);
       setPlan(data.plan);
       setTokenUsage(data.usage || null);
       setAiModel(data.model || "Atria-Dawn-Preview");
