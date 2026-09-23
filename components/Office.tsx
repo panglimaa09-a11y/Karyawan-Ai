@@ -399,7 +399,7 @@ Buat hasil baru yang lebih ringkas dan valid.`;
     const u32 = (v: number) => { const a = new Uint8Array(4); new DataView(a.buffer).setUint32(0, v >>> 0, true); return a; };
     const join = (...parts: Uint8Array[]) => { const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let p = 0; for (const part of parts) { out.set(part, p); p += part.length; } return out; };
     for (const file of projectFiles) {
-      const name = enc.encode(file.path.replace(/^\\/+/, ""));
+      const name = enc.encode(file.path.replace(/^\/+/, ""));
       const data = enc.encode(file.content);
       const crc = crc32(data);
       const local = join(u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0), name, data);
