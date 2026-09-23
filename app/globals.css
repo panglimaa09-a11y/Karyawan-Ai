@@ -92,3 +92,26 @@ button,textarea{font:inherit}
 .repair-btn{margin-top:12px;width:100%}
 
 .project-ready{margin-top:10px;border:1px solid #294a3b;background:#0d1a15;border-radius:10px;padding:10px;display:grid;gap:5px}.project-ready b{font-size:11px;color:#6ee7a0}.project-ready span{font-size:10px;color:#9fb0a6;line-height:1.45}.project-ready .side-action{margin-top:4px}.confirm-card{margin-top:12px;border:1px solid #3b4d68;background:#101a29;border-radius:11px;padding:11px}.confirm-card>b{display:block;font-size:11px}.confirm-card>span{display:block;color:#9aa8ba;font-size:10px;line-height:1.5;margin-top:5px}.confirm-card .workspace-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.confirm-card .primary,.confirm-card .side-action{margin-top:8px}
+
+.team-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px}
+.team-stats div{border:1px solid #263142;background:#0e141d;border-radius:10px;padding:9px;text-align:center}
+.team-stats b{display:block;font-size:17px;color:#eef2f7}.team-stats span{display:block;margin-top:3px;color:#8995a5;font-size:9px}
+.agent-search{width:100%;margin-top:9px;border:1px solid #293445;background:#080c12;color:#e9eef5;border-radius:9px;padding:9px;font-size:10px;outline:none}
+.quick-prompts{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.quick-prompts button{border:1px solid #293445;background:#111824;color:#b9c5d4;border-radius:8px;padding:7px 8px;font-size:9px;cursor:pointer}
+.quick-prompts button:hover{border-color:#47658d;color:#fff}
+.workspace{width:min(1400px,100%);height:min(820px,100%)}
+.workspace-grid{grid-template-columns:repeat(3,1fr)}
+.workspace-card.hero{grid-column:1/-1}
+.workspace-card{min-height:125px}
+.file-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.file-chip{border:1px solid #263142;background:#111824;color:#aebaca;border-radius:8px;padding:6px 8px;font-size:9px}
+.workspace-actions{display:flex;gap:7px;flex-wrap:wrap}
+.workspace-actions .primary,.workspace-actions .side-action{width:auto;margin-top:0}
+.error-box{margin-top:10px;border:1px solid #5a2932;background:#1b0f13;color:#ff9ba6;border-radius:10px;padding:10px;font-size:10px;line-height:1.5}
+@media(max-width:900px){
+  .team-stats{grid-template-columns:repeat(3,1fr)}
+  .workspace-grid{grid-template-columns:1fr}
+  .workspace-actions{display:grid;grid-template-columns:1fr}
+  .workspace-actions .primary,.workspace-actions .side-action{width:100%}
+}
