@@ -176,8 +176,7 @@ export default function Office() {
         setArtifacts((items) => [...items, { agent: id, title: task.deliverable, content: "", status: "working" }]);
         try {
           const agentRes = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable }) });
-          const agentData = await agentRes.json();
-          if (!agentRes.ok) throw new Error(agentData.error || `${id} gagal mengerjakan task.`);
+          const agentData = await readApiResponse(agentRes);
           if (Array.isArray(agentData.requests) && agentData.requests.length) {
             setRequests((items) => [...items, ...agentData.requests].slice(-20));
           }
@@ -204,6 +203,18 @@ STATUS: AI EMPLOYEES COMPLETED THEIR WORK
     } finally { setRunning(false); }
   };
 
+  async function readApiResponse(response: Response) {
+    const text = await response.text();
+    let data: any = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(text?.slice(0, 500) || `Server mengembalikan respons yang tidak valid (HTTP ${response.status}).`);
+    }
+    if (!response.ok) throw new Error(data?.error || `Request gagal (HTTP ${response.status}).`);
+    return data;
+  }
+
   const retryAgent = async (id: "designer" | "developer" | "writer" | "qa") => {
     const task = plan?.tasks.find((t) => t.agent === id);
     const current = artifacts.find((a) => a.agent === id);
@@ -219,8 +230,7 @@ PERBAIKI ULANG PEKERJAAN SEBELUMNYA.
 Error sebelumnya: ${current?.content || "Tidak ada detail error."}
 Buat hasil baru yang lebih ringkas dan valid.`;
       const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: repairTask, deliverable: task.deliverable }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `${id} gagal diperbaiki.`);
+      const data = await readApiResponse(res);
       if (Array.isArray(data.requests) && data.requests.length) setRequests((items) => [...items, ...data.requests].slice(-20));
       setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: data.artifact || "Agent tidak mengembalikan artifact.", model: data.model, usage: data.usage, status: "done" } : a));
       updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: "Perbaikan selesai" });
