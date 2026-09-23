@@ -167,26 +167,34 @@ export default function Office() {
       updateAgent("manager", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
       const byAgent = new Map<ManagerPlan["tasks"][number]["agent"], ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
       const sequence: Array<"designer" | "writer" | "developer" | "qa"> = ["designer", "writer", "developer", "qa"];
-      for (const id of sequence) {
+      const jobs = sequence.map(async (id) => {
         const task = byAgent.get(id);
-        if (!task) continue;
+        if (!task) return;
         setSelected(id);
         updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 15, task: task.task });
         setArtifacts((items) => [...items, { agent: id, title: task.deliverable, content: "", status: "working" }]);
         try {
-          const agentRes = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable }) });
+          const agentRes = await fetch("/api/agent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable })
+          });
           const agentData = await readApiResponse(agentRes);
           if (Array.isArray(agentData.requests) && agentData.requests.length) {
             setRequests((items) => [...items, ...agentData.requests].slice(-20));
           }
-          setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: agentData.artifact || "Agent tidak mengembalikan artifact.", model: agentData.model, usage: agentData.usage, status: "done" } : a));
+          setArtifacts((items) => items.map((a) => a.agent === id
+            ? { ...a, content: agentData.artifact || "Agent tidak mengembalikan artifact.", model: agentData.model, usage: agentData.usage, status: "done" }
+            : a
+          ));
           updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: "Artifact selesai" });
         } catch (agentError) {
           const message = agentError instanceof Error ? agentError.message : "Agent gagal.";
           setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: message, status: "error" } : a));
           updateAgent(id, { progress: 100, status: "idle", task: `Gagal: ${message.slice(0, 140)}` });
         }
-      }
+      });
+      await Promise.all(jobs);
       setWorkspaceTab("artifacts");
       setArtifact(`PROJECT: ${prompt.trim()}
 
