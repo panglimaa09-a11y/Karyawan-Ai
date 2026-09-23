@@ -166,7 +166,7 @@ export default function Office() {
     try {
       const saved = localStorage.getItem("ai-office-project");
       if (!saved) return;
-      const data: SavedProject = JSON.parse(saved);
+      const data: SavedProject = JSON.parse(saved);\n      const savedModels = localStorage.getItem("ai-office-model-config");\n      if (savedModels) setModelConfig(JSON.parse(savedModels));
       setPrompt(data.project || "");
       setHistory(data.history || []);
       setPlan(data.plan || null);
