@@ -1,25 +1,26 @@
 import { NextResponse } from "next/server";
+import { getPool, requireAdmin } from "@/lib/server/db";
+import { getEmployeeProvider, callProvider } from "@/lib/server/provider";
+import { audit, officeEvent } from "@/lib/server/audit";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-
-type Plan = {
-  summary: string;
-  tasks: Array<{
-    agent: string;
-    task: string;
-    deliverable: string;
-  }>;
+type PlannedTask = {
+  title: string;
+  description: string;
+  agentId: string;
+  deliverable: string;
+  acceptanceCriteria: string;
+  priority: "low" | "normal" | "high" | "urgent";
+  dependsOn: number[];
 };
 
 function extractJsonObject(raw: string): string {
   const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
   const start = cleaned.indexOf("{");
-  if (start < 0) throw new Error("Manager returned no JSON object.");
-  let depth = 0;
-  let quote = "";
-  let escaped = false;
+  if (start < 0) throw new Error("Raka tidak mengembalikan objek JSON.");
+  let depth = 0, quote = "", escaped = false;
   for (let i = start; i < cleaned.length; i++) {
     const ch = cleaned[i];
     if (quote) {
@@ -28,146 +29,169 @@ function extractJsonObject(raw: string): string {
       else if (ch === quote) quote = "";
       continue;
     }
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-      continue;
-    }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
     if (ch === "{") depth++;
-    if (ch === "}") {
-      depth--;
-      if (depth === 0) return cleaned.slice(start, i + 1);
-    }
+    if (ch === "}") { depth--; if (depth === 0) return cleaned.slice(start, i + 1); }
   }
-  throw new Error("Manager returned incomplete JSON.");
+  throw new Error("Raka mengembalikan JSON yang tidak lengkap.");
 }
 
-function parseManagerPlan(raw: string): Plan {
+function parsePlan(raw: string): { summary: string; tasks: PlannedTask[] } {
   const candidate = extractJsonObject(raw);
   try {
     return JSON.parse(candidate);
   } catch {
-    // Some compatible models return JavaScript-style object literals
-    // (single-quoted strings or unquoted property names) despite the prompt.
     const normalized = candidate
       .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_m, value) => JSON.stringify(String(value).replace(/\\'/g, "'")))
-      .replace(/([{,]\\s*)([A-Za-z_$][\\w$-]*)\\s*:/g, '$1"$2":');
+      .replace(/([{,]\s*)([A-Za-z_$][\w$-]*)\s*:/g, '$1"$2":');
     return JSON.parse(normalized);
   }
 }
 
-
-
-
-;
-
-function extractText(data: any): string {
-  if (typeof data?.output_text === "string") return data.output_text;
-
-  const choice = data?.choices?.[0];
-  if (typeof choice?.message?.content === "string") return choice.message.content;
-
-  const parts: string[] = [];
-  for (const item of data?.output ?? []) {
-    for (const content of item?.content ?? []) {
-      if (typeof content?.text === "string") parts.push(content.text);
-    }
-  }
-  return parts.join("\n");
-}
-
+/**
+ * POST /api/manager — Bos Angga mengirim instruksi; Raka menyusun rencana;
+ * sistem menyimpan project + tugas + dependensi ke PostgreSQL. PRD §10.
+ */
 export async function POST(request: Request) {
+  const pool = getPool();
   try {
+    requireAdmin(request);
     const body = await request.json();
-    const project = body?.project;
-    const requestedModel = String(body?.model || "").trim();
-    const projectText = typeof project === "string" ? project.trim().slice(0, 8000) : "";
-
+    const projectText = String(body?.project || "").trim().slice(0, 8000);
+    const title = String(body?.title || "").trim().slice(0, 200) || projectText.slice(0, 80);
     if (projectText.length < 3) {
-      return NextResponse.json({ error: "Project description is required." }, { status: 400 });
+      return NextResponse.json({ error: "Deskripsi project wajib diisi (minimal 3 karakter)." }, { status: 400 });
     }
 
-    // 9Router configuration. AI_BASE_URL must point to a reachable HTTPS 9Router OpenAI-compatible gateway.
-    const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
-    const apiKey = process.env.AI_API_KEY || "";
-    const model = requestedModel || process.env.AI_MODEL_RAKA || process.env.AI_MODEL || "oc/deepseek-v4-flash-free";
-    const timeoutMs = Math.max(15000, Number(process.env.AI_TIMEOUT_MS || 45000));
-
-    if (!baseUrl) {
-      return NextResponse.json(
-        {
-          error:
-            "AI_BASE_URL belum dipasang di Vercel. Arahkan ke 9Router HTTPS yang dapat diakses Vercel; 127.0.0.1/localhost tidak bisa diakses dari Vercel.",
-          setupRequired: true
-        },
-        { status: 503 }
-      );
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    let response: Response;
+    let raka;
     try {
-      response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are Raka, the Project Manager of an AI software team. Analyze the user's project and create an actionable execution plan. Return ONLY valid JSON with this shape: {summary:string,tasks:[{agent:'designer'|'developer'|'writer'|'qa',task:string,deliverable:string}]} . Create exactly 21 tasks, one for each agent: analyst, strategist, designer, visual, writer, frontend, backend, database, security, ai, api, qa, reviewer, devops, cloud, mobile, seo, marketing, finance, docs, support. Be concrete and practical. Tasks may run in parallel unless a dependency is explicitly stated. Do not invent access to external systems."
-          },
-          { role: "user", content: projectText }
-        ]
-      })
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    const responseText = await response.text();
-    let data: any = {};
-    try {
-      data = responseText ? JSON.parse(responseText) : {};
-    } catch {
+      raka = await getEmployeeProvider("raka");
+    } catch (e) {
       return NextResponse.json(
-        { error: responseText?.slice(0, 500) || `AI provider returned non-JSON response (HTTP ${response.status}).` },
-        { status: 502 }
+        { error: e instanceof Error ? e.message : "Raka belum dikonfigurasi.", setupRequired: true },
+        { status: 409 }
       );
     }
 
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: data?.error?.message || `AI gateway returned HTTP ${response.status}.` },
-        { status: response.status }
-      );
-    }
-
-    const raw = extractText(data).trim();
-    if (!raw) throw new Error("Manager returned an empty response.");
-    const plan = parseManagerPlan(raw);
-
-    const allowed = new Set(["analyst","strategist","designer","visual","writer","frontend","backend","database","security","ai","api","qa","reviewer","devops","cloud","mobile","seo","marketing","finance","docs","support"]);
-    plan.tasks = Array.isArray(plan.tasks)
-      ? plan.tasks.filter((t) => allowed.has(t.agent)).slice(0, 21)
-      : [];
-
-    if (!plan.summary || plan.tasks.length !== 21) {
-      throw new Error("Manager plan is incomplete.");
-    }
-
-    return NextResponse.json({ plan, model, usage: data?.usage || null });
-  } catch (error) {
-    console.error("manager route error", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unexpected server error." },
-      { status: 500 }
+    const roster = await pool.query(
+      "SELECT id, name, role FROM employees WHERE enabled = TRUE ORDER BY name"
     );
+    const rosterText = roster.rows.map((r: any) => `- ${r.id} (${r.name} — ${r.role})`).join("\n");
+
+    await officeEvent("raka", "planning_started", "working", "Raka mulai menyusun rencana.", { title });
+
+    const planPrompt =
+`INSTRUKSI BOS ANGGA:
+${projectText}
+
+KARYAWAN YANG TERSEDIA:
+${rosterText}
+
+Tugasmu sebagai Project Manager: susun rencana eksekusi konkret.
+Kembalikan HANYA JSON valid dengan bentuk:
+{"summary": string, "tasks": [{"title": string, "description": string, "agentId": string, "deliverable": string, "acceptanceCriteria": string, "priority": "low"|"normal"|"high"|"urgent", "dependsOn": number[]}]}
+
+Aturan:
+- agentId harus salah satu ID karyawan di atas.
+- dependsOn berisi indeks tugas (0-based) yang harus selesai dulu; [] bila tidak ada.
+- Tulis acceptanceCriteria yang bisa diverifikasi (bukan sekadar "selesai").
+- Jangan mengklaim akses ke sistem eksternal yang tidak ada.
+- 3 sampai 12 tugas. Ringkas tapi konkret.`;
+
+    let plan;
+    try {
+      const result = await callProvider(
+        raka,
+        [
+          { role: "system", content: raka.systemPrompt + " Kepribadian: " + raka.personality + ". Jangan mengklaim tindakan yang belum dijalankan." },
+          { role: "user", content: planPrompt }
+        ],
+        { maxTokens: 4000, temperature: 0.2, timeoutMs: 120000 }
+      );
+      plan = parsePlan(result.text);
+    } catch (e) {
+      await officeEvent("raka", "planning_failed", "failed", "Raka gagal menyusun rencana: " + (e instanceof Error ? e.message : "error"));
+      throw e;
+    }
+
+    const validIds = new Set(roster.rows.map((r: any) => r.id));
+    if (!plan.summary || !Array.isArray(plan.tasks) || plan.tasks.length < 1 || plan.tasks.length > 12) {
+      throw new Error("Rencana Raka tidak lengkap (butuh 1–12 tugas dengan ringkasan).");
+    }
+    const tasks: PlannedTask[] = plan.tasks.map((t: any, i: number) => {
+      const agentId = String(t?.agentId || "").trim();
+      if (!validIds.has(agentId)) throw new Error(`Tugas #${i + 1} menunjuk karyawan tak dikenal: "${agentId}".`);
+      const dependsOn: number[] = Array.isArray(t?.dependsOn)
+        ? (t.dependsOn as any[]).map((d: any) => Number(d)).filter((d: number) => Number.isInteger(d) && d >= 0 && d < plan.tasks.length && d !== i)
+        : [];
+      const priority = ["low", "normal", "high", "urgent"].includes(t?.priority) ? t.priority : "normal";
+      const title = String(t?.title || "").trim().slice(0, 200);
+      if (!title) throw new Error(`Tugas #${i + 1} tidak memiliki judul.`);
+      return {
+        title,
+        description: String(t?.description || "").trim().slice(0, 4000),
+        agentId,
+        deliverable: String(t?.deliverable || "").trim().slice(0, 2000),
+        acceptanceCriteria: String(t?.acceptanceCriteria || "").trim().slice(0, 2000),
+        priority,
+        dependsOn: [...new Set(dependsOn)]
+      };
+    });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const proj = await client.query(
+        "INSERT INTO projects(name, description) VALUES ($1, $2) RETURNING id, name",
+        [title, projectText]
+      );
+      const projectId = proj.rows[0].id;
+      const created: any[] = [];
+      for (const t of tasks) {
+        const ins = await client.query(
+          `INSERT INTO tasks(project_id, title, description, status, priority, acceptance_criteria, assigned_employee_id)
+           VALUES ($1, $2, $3, 'planning', $4, $5, $6)
+           RETURNING id, title, status`,
+          [projectId, t.title, `${t.description}\n\nDeliverable: ${t.deliverable}`, t.priority, t.acceptanceCriteria || null, t.agentId]
+        );
+        const taskId = ins.rows[0].id;
+        await client.query(
+          "INSERT INTO task_assignments(task_id, employee_id, assignment_role) VALUES ($1, $2, 'owner')",
+          [taskId, t.agentId]
+        );
+        created.push({ ...ins.rows[0], agentId: t.agentId, deliverable: t.deliverable, priority: t.priority });
+      }
+      for (let i = 0; i < tasks.length; i++) {
+        for (const dep of tasks[i].dependsOn) {
+          await client.query(
+            "INSERT INTO task_dependencies(task_id, depends_on_task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            [created[i].id, created[dep].id]
+          );
+        }
+      }
+      await client.query("UPDATE tasks SET status = 'queued', updated_at = now() WHERE project_id = $1", [projectId]);
+      await client.query("COMMIT");
+
+      for (const c of created) {
+        await officeEvent(c.agentId, "task_queued", "info", `Tugas "${c.title}" masuk antrean.`, { taskId: c.id, projectId });
+      }
+      await officeEvent("raka", "planning_completed", "completed", `Rencana selesai: ${created.length} tugas.`, { projectId });
+      await audit("owner", "plan_created", "project", projectId, { title, taskCount: created.length, summary: plan.summary });
+
+      return NextResponse.json({
+        project: { id: projectId, name: proj.rows[0].name, summary: plan.summary },
+        tasks: created.map((c, i) => ({ ...c, dependsOn: tasks[i].dependsOn })),
+        model: raka.model
+      }, { status: 201 });
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Internal error";
+    const status = message === "UNAUTHORIZED" ? 401 : message.includes("Raka belum") || (e as any)?.setupRequired ? 409 : 502;
+    return NextResponse.json({ error: message }, { status });
   }
 }

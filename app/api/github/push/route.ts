@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getPool, requireAdmin } from "@/lib/server/db";
+import { audit } from "@/lib/server/audit";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -27,16 +29,42 @@ async function github(path: string, init: RequestInit, token: string) {
 
 export async function POST(req: Request) {
   try {
+    requireAdmin(req);
     const body = await req.json();
     const repoUrl = String(body?.repoUrl || "").trim();
     const branch = String(body?.branch || "main").trim() || "main";
     const message = String(body?.message || "feat: publish AI Office project").trim();
+    const approvalId = String(body?.approvalId || "").trim();
     const files = Array.isArray(body?.files)
       ? body.files.filter((f: any) => f && typeof f.path === "string" && typeof f.content === "string").slice(0, 100)
       : [];
 
     if (!repoUrl || !files.length) {
       return NextResponse.json({ error: "Repository dan file project wajib diisi." }, { status: 400 });
+    }
+
+    // PRD §11: push ke GitHub wajib memiliki persetujuan yang masih berlaku.
+    const pool = getPool();
+    if (!approvalId) {
+      return NextResponse.json({
+        error: "Push ke GitHub memerlukan persetujuan. Buat permintaan via POST /api/approvals lalu setujui sebelum push.",
+        approvalRequired: true
+      }, { status: 403 });
+    }
+    const ap = await pool.query(
+      "SELECT id, status, action_type, executed_at FROM approval_requests WHERE id = $1",
+      [approvalId]
+    );
+    if (!ap.rowCount) return NextResponse.json({ error: "Persetujuan tidak ditemukan." }, { status: 404 });
+    const approval = ap.rows[0];
+    if (approval.status !== "approved") {
+      return NextResponse.json({ error: `Persetujuan berstatus "${approval.status}", bukan "approved".` }, { status: 403 });
+    }
+    if (approval.executed_at) {
+      return NextResponse.json({ error: "Persetujuan ini sudah pernah dieksekusi." }, { status: 409 });
+    }
+    if (approval.action_type !== "github_push") {
+      return NextResponse.json({ error: `Persetujuan ini untuk "${approval.action_type}", bukan "github_push".` }, { status: 403 });
     }
 
     const token = process.env.GITHUB_TOKEN || "";
@@ -97,13 +125,21 @@ export async function POST(req: Request) {
     }, token);
     if (!updateRef.ok) return NextResponse.json({ error: "Commit berhasil dibuat tetapi branch gagal diperbarui.", detail: (await updateRef.text()).slice(0, 500) }, { status: updateRef.status });
 
+    const commitUrl = `https://github.com/${parsed.owner}/${parsed.repo}/commit/${commitData.sha}`;
+    await pool.query(
+      "UPDATE approval_requests SET executed_at = now(), executed_result = $2::jsonb WHERE id = $1",
+      [approvalId, JSON.stringify({ commit: commitData.sha, url: commitUrl, files: treeEntries.length })]
+    );
+    await audit("owner", "github_push", "approval", approvalId,
+      { repo: `${parsed.owner}/${parsed.repo}`, branch, commit: commitData.sha, files: treeEntries.length });
+
     return NextResponse.json({
       ok: true,
       repo: `${parsed.owner}/${parsed.repo}`,
       branch,
       commit: commitData.sha,
       files: treeEntries.map((x: any) => x.path),
-      url: `https://github.com/${parsed.owner}/${parsed.repo}/commit/${commitData.sha}`
+      url: commitUrl
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "GitHub publish gagal." }, { status: 500 });
