@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   if(conv) { const exists=await pool.query("SELECT id FROM conversations WHERE id=$1 AND employee_id=$2",[conv,employeeId]); if(!exists.rowCount)return NextResponse.json({error:"Percakapan tidak ditemukan."},{status:404}); }
   else { const created=await pool.query("INSERT INTO conversations(employee_id,title) VALUES($1,$2) RETURNING id",[employeeId,message.slice(0,80)]); conv=created.rows[0].id; }
   await pool.query("INSERT INTO messages(conversation_id,role,employee_id,content) VALUES($1,'user',$2,$3)",[conv,employeeId,message]);
+  await pool.query("INSERT INTO office_events(employee_id,event_type,status,message,metadata) VALUES($1,'chat_started','working',$2,$3::jsonb)",[employeeId,e.name+" mulai memproses pesan.",JSON.stringify({conversationId:conv,model:e.selected_model})]);
   const history=await pool.query("SELECT role,content FROM messages WHERE conversation_id=$1 ORDER BY created_at DESC LIMIT 20",[conv]);
   const messages=[{role:"system",content:e.system_prompt+" Kepribadian: "+e.personality+". Jangan mengklaim tool atau tindakan yang belum dijalankan. Minta persetujuan Bos Angga untuk tindakan penting."},...history.rows.reverse().map((m:{role:string;content:string})=>({role:m.role,content:m.content}))];
   const url=e.base_url.replace(/\/$/,"")+(e.api_format==="openai-responses"?"/responses":"/chat/completions");
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
   if(!answer) return NextResponse.json({error:"Provider merespons tetapi tidak memberikan teks yang dikenali."},{status:502});
   const usage=data.usage||{}; await pool.query("INSERT INTO messages(conversation_id,role,employee_id,content,model_id,prompt_tokens,completion_tokens) VALUES($1,'assistant',$2,$3,$4,$5,$6)",[conv,employeeId,answer,e.selected_model,usage.prompt_tokens??usage.input_tokens??null,usage.completion_tokens??usage.output_tokens??null]);
   await pool.query("UPDATE conversations SET updated_at=now() WHERE id=$1",[conv]);
+  await pool.query("INSERT INTO office_events(employee_id,event_type,status,message,metadata) VALUES($1,'chat_completed','completed',$2,$3::jsonb)",[employeeId,e.name+" menyelesaikan respons.",JSON.stringify({conversationId:conv,model:e.selected_model})]);
   await pool.query("INSERT INTO usage_records(provider_id,employee_id,model_id,prompt_tokens,completion_tokens,status,duration_ms) VALUES($1,$2,$3,$4,$5,'success',$6)",[e.pid,employeeId,e.selected_model,usage.prompt_tokens??usage.input_tokens??null,usage.completion_tokens??usage.output_tokens??null,Date.now()-started]);
   return NextResponse.json({conversationId:conv,employee:{id:e.id,name:e.name,role:e.role},model:e.selected_model,answer,usage:{prompt_tokens:usage.prompt_tokens??usage.input_tokens??null,completion_tokens:usage.completion_tokens??usage.output_tokens??null}});
  } catch(err){const message=err instanceof Error?err.message:"Internal error";return NextResponse.json({error:message},{status:message==="UNAUTHORIZED"?401:503});}
