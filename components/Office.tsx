@@ -242,6 +242,31 @@ export default function Office() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const officeIds: Record<string, string> = { raka: "manager", sinta: "designer", andi: "frontend", dina: "writer", bima: "qa", maya: "analyst", dimas: "database", nadia: "strategist", fajar: "security", lila: "support" };
+    const poll = async () => {
+      try {
+        const response = await fetch("/api/office/status", { cache: "no-store" });
+        const data = await response.json();
+        if (cancelled || !response.ok || !Array.isArray(data.events)) return;
+        const latest = new Map<string, { status: string; eventType: string }>();
+        for (const event of data.events) if (officeIds[event.employeeId]) latest.set(officeIds[event.employeeId], event);
+        setAgents((current) => current.map((agent) => {
+          const event = latest.get(agent.id);
+          if (!event) return agent;
+          if (event.status === "working") return { ...agent, status: "working", progress: Math.max(agent.progress, 25), task: event.eventType === "chat_started" ? "Sedang menjawab chat AI nyata" : "Sedang bekerja dari event backend" };
+          if (event.status === "failed") return { ...agent, status: "review", task: "Perlu ditinjau: proses backend gagal" };
+          if (event.status === "completed" && agent.status === "working") return { ...agent, status: "idle", progress: 100, task: "Respons AI selesai" };
+          return agent;
+        }));
+      } catch { /* The office remains usable if the database is offline. */ }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 4000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
   const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
   const runProject = async () => {
