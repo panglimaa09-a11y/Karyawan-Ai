@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-karyawan_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-kai_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - kai-postgres:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kai_user} -d ${POSTGRES_DB:-karyawan_ai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [kai-private]
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-kai_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-karyawan_ai}
+      KAI_ENCRYPTION_KEY: ${KAI_ENCRYPTION_KEY:?Set KAI_ENCRYPTION_KEY in .env}
+      KAI_ADMIN_TOKEN: ${KAI_ADMIN_TOKEN:?Set KAI_ADMIN_TOKEN in .env}
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    networks: [kai-private]
+networks:
+  kai-private:
+    driver: bridge
+volumes:
+  kai-postgres:
