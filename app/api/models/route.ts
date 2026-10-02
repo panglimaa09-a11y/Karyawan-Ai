@@ -1,33 +1,67 @@
 import { NextResponse } from "next/server";
+import { getPool, requireAdmin } from "@/lib/server/db";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
 
-export async function GET() {
-  const baseUrl = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
-  const apiKey = process.env.AI_API_KEY || "";
-  if (!baseUrl) {
-    return NextResponse.json({ error: "AI_BASE_URL belum dikonfigurasi.", models: [] }, { status: 503 });
-  }
-
+/**
+ * GET /api/models?providerId=<uuid>
+ * Lists models previously discovered from a real 9Router /v1/models call
+ * (synced via POST /api/providers/[id]/models) and persisted in
+ * provider_models. Never invents model IDs. PRD §8.
+ */
+export async function GET(request: Request) {
   try {
-    const response = await fetch(baseUrl + "/models", {
-      headers: apiKey ? { Authorization: "Bearer " + apiKey } : {},
-      cache: "no-store"
+    requireAdmin(request);
+    const pool = getPool();
+    const url = new URL(request.url);
+    const providerId = url.searchParams.get("providerId");
+
+    let provider;
+    if (providerId) {
+      const q = await pool.query(
+        "SELECT id, name, base_url, enabled FROM providers WHERE id = $1",
+        [providerId]
+      );
+      if (!q.rowCount) {
+        return NextResponse.json({ error: "Provider tidak ditemukan." }, { status: 404 });
+      }
+      provider = q.rows[0];
+    } else {
+      // Default: the seeded 9Router gateway, else the first enabled provider.
+      const q = await pool.query(
+        `SELECT id, name, base_url, enabled FROM providers
+         WHERE enabled = TRUE
+         ORDER BY (base_url = 'http://127.0.0.1:20128/v1') DESC, created_at ASC
+         LIMIT 1`
+      );
+      if (!q.rowCount) {
+        return NextResponse.json(
+          { error: "Belum ada provider aktif. Tambahkan 9Router di /control lalu sinkronkan model.", models: [] },
+          { status: 404 }
+        );
+      }
+      provider = q.rows[0];
+    }
+
+    const { rows } = await pool.query(
+      `SELECT model_id AS id, COALESCE(display_name, model_id) AS name, discovered_at
+       FROM provider_models WHERE provider_id = $1 ORDER BY model_id`,
+      [provider.id]
+    );
+
+    return NextResponse.json({
+      provider: { id: provider.id, name: provider.name, base_url: provider.base_url, enabled: provider.enabled },
+      models: rows,
+      synced: rows.length > 0,
+      hint: rows.length === 0
+        ? "Belum ada model tersinkron. Jalankan POST /api/providers/[id]/models untuk membaca katalog nyata dari 9Router."
+        : undefined
     });
-    const text = await response.text();
-    let data: any = {};
-    try { data = text ? JSON.parse(text) : {}; } catch {
-      return NextResponse.json({ error: "9Router mengembalikan respons model yang tidak valid.", models: [] }, { status: 502 });
-    }
-    if (!response.ok) {
-      return NextResponse.json({ error: data?.error?.message || `9Router /models HTTP ${response.status}`, models: [] }, { status: response.status });
-    }
-    const models = Array.isArray(data?.data)
-      ? data.data.map((m: any) => typeof m === "string" ? m : m?.id).filter((id: any): id is string => typeof id === "string")
-      : [];
-    return NextResponse.json({ models });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Gagal mengambil model dari 9Router.", models: [] }, { status: 502 });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Internal error";
+    return NextResponse.json(
+      { error: message, models: [] },
+      { status: message === "UNAUTHORIZED" ? 401 : 503 }
+    );
   }
 }

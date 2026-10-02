@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, Text } from "@react-three/drei";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import EmployeeAvatar from "./EmployeeAvatar";
 
@@ -18,63 +18,96 @@ type Agent = {
 };
 
 type ProjectHistory = { project: string; time: string; status: string };
-type ResourceRequest = { id: string; from: string; request: string; reason: string; status: "pending" | "provided"; value?: string };
+type ApprovalRequestItem = { id: string; taskId: string; from: string; actionType: string; description: string; status: "pending" | "approved" | "rejected" };
 type DeliveryConfig = { repoUrl: string; branch: string; };
-type SavedProject = { project: string; history: ProjectHistory[]; plan: ManagerPlan | null; artifacts: Artifact[]; artifact: string; aiModel: string; tokenUsage: TokenUsage; requests: ResourceRequest[]; delivery: DeliveryConfig };
+type SavedProject = { project: string; history: ProjectHistory[]; plan: ManagerPlan | null; artifacts: Artifact[]; artifact: string; aiModel: string; tokenUsage: TokenUsage; requests: ApprovalRequestItem[]; delivery: DeliveryConfig };
 type TokenUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
 type ProjectFile = { path: string; content: string };
-type Artifact = { agent: string; title: string; content: string; files?: ProjectFile[]; model?: string; usage?: TokenUsage; status: "working" | "done" | "error" };
+type Artifact = { taskId: string; agentId: string; title: string; content: string; status: "working" | "done" | "error"; model?: string; usage?: TokenUsage };
+type EmployeeInfo = { id: string; name: string; role: string; provider_name: string | null; model_id: string | null };
+
+type PlanTask = {
+  id: string;
+  title: string;
+  agentId: string;
+  deliverable: string;
+  priority: string;
+  dependsOn: number[];
+  status: string;
+};
 
 type ManagerPlan = {
   summary: string;
-  tasks: Array<{
-    agent: string;
-    task: string;
-    deliverable: string;
-  }>;
+  tasks: PlanTask[];
 };
 
+const STORAGE_KEY = "kai-office-project-v2";
+
 const initialAgents: Agent[] = [
-  { id: "manager", name: "Raka", role: "Project Manager", emoji: "👨‍💼", status: "idle", progress: 0, task: "Menunggu proyek", position: [-4.2, .45, -2.5] },
-  { id: "analyst", name: "Ardi", role: "Business Analyst", emoji: "📊", status: "idle", progress: 0, task: "Menunggu Manager", position: [-2.8, .45, -2.5] },
-  { id: "strategist", name: "Naya", role: "Strategy", emoji: "🧠", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.4, .45, -2.5] },
-  { id: "designer", name: "Sinta", role: "UI/UX Designer", emoji: "🎨", status: "idle", progress: 0, task: "Menunggu Manager", position: [0, .45, -2.5] },
-  { id: "visual", name: "Vina", role: "Visual Designer", emoji: "🖌️", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.4, .45, -2.5] },
-  { id: "writer", name: "Dina", role: "Copywriter", emoji: "✍️", status: "idle", progress: 0, task: "Menunggu Manager", position: [2.8, .45, -2.5] },
-  { id: "frontend", name: "Andi", role: "Frontend Developer", emoji: "💻", status: "idle", progress: 0, task: "Menunggu Manager", position: [-4.2, .45, -.5] },
-  { id: "backend", name: "Beni", role: "Backend Developer", emoji: "⚙️", status: "idle", progress: 0, task: "Menunggu Manager", position: [-2.8, .45, -.5] },
-  { id: "database", name: "Dimas", role: "Database Engineer", emoji: "🗄️", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.4, .45, -.5] },
-  { id: "security", name: "Rian", role: "Security Engineer", emoji: "🔐", status: "idle", progress: 0, task: "Menunggu Manager", position: [0, .45, -.5] },
-  { id: "ai", name: "Fajar", role: "AI Engineer", emoji: "🤖", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.4, .45, -.5] },
-  { id: "api", name: "Reza", role: "API Engineer", emoji: "🔌", status: "idle", progress: 0, task: "Menunggu Manager", position: [2.8, .45, -.5] },
-  { id: "qa", name: "Bima", role: "QA Engineer", emoji: "🧪", status: "idle", progress: 0, task: "Menunggu Manager", position: [-4.2, .45, 1.5] },
-  { id: "reviewer", name: "Kevin", role: "Code Reviewer", emoji: "🔍", status: "idle", progress: 0, task: "Menunggu Manager", position: [-2.8, .45, 1.5] },
-  { id: "devops", name: "Yoga", role: "DevOps Engineer", emoji: "🚀", status: "idle", progress: 0, task: "Menunggu Manager", position: [-1.4, .45, 1.5] },
-  { id: "cloud", name: "Aldi", role: "Cloud Engineer", emoji: "☁️", status: "idle", progress: 0, task: "Menunggu Manager", position: [0, .45, 1.5] },
-  { id: "mobile", name: "Riko", role: "Mobile Developer", emoji: "📱", status: "idle", progress: 0, task: "Menunggu Manager", position: [1.4, .45, 1.5] },
-  { id: "seo", name: "Sari", role: "SEO Specialist", emoji: "🌐", status: "idle", progress: 0, task: "Menunggu Manager", position: [2.8, .45, 1.5] },
-  { id: "marketing", name: "Tio", role: "Marketing", emoji: "📈", status: "idle", progress: 0, task: "Menunggu Manager", position: [-2.1, .45, 3.2] },
-  { id: "finance", name: "Rio", role: "Finance", emoji: "💰", status: "idle", progress: 0, task: "Menunggu Manager", position: [0, .45, 3.2] },
-  { id: "docs", name: "Lala", role: "Documentation", emoji: "📚", status: "idle", progress: 0, task: "Menunggu Manager", position: [2.1, .45, 3.2] },
-  { id: "support", name: "Bayu", role: "Support Engineer", emoji: "🛠️", status: "idle", progress: 0, task: "Menunggu Manager", position: [3.9, .45, 3.2] }
+  { id: "raka", name: "Raka", role: "Project Manager", emoji: "👨‍💼", status: "idle", progress: 0, task: "Menunggu proyek", position: [-4.2, .45, -2.5] },
+  { id: "sinta", name: "Sinta", role: "UI-UX Designer", emoji: "🎨", status: "idle", progress: 0, task: "Menunggu proyek", position: [-2.1, .45, -2.5] },
+  { id: "andi", name: "Andi", role: "Software Developer", emoji: "💻", status: "idle", progress: 0, task: "Menunggu proyek", position: [0, .45, -2.5] },
+  { id: "dina", name: "Dina", role: "Content Writer", emoji: "✍️", status: "idle", progress: 0, task: "Menunggu proyek", position: [2.1, .45, -2.5] },
+  { id: "bima", name: "Bima", role: "QA Engineer", emoji: "🧪", status: "idle", progress: 0, task: "Menunggu proyek", position: [4.2, .45, -2.5] },
+  { id: "maya", name: "Maya", role: "Data Analyst", emoji: "📊", status: "idle", progress: 0, task: "Menunggu proyek", position: [-4.2, .45, -.5] },
+  { id: "dimas", name: "Dimas", role: "DevOps Engineer", emoji: "🚀", status: "idle", progress: 0, task: "Menunggu proyek", position: [-2.1, .45, -.5] },
+  { id: "nadia", name: "Nadia", role: "Researcher", emoji: "🔍", status: "idle", progress: 0, task: "Menunggu proyek", position: [0, .45, -.5] },
+  { id: "fajar", name: "Fajar", role: "Security Engineer", emoji: "🔐", status: "idle", progress: 0, task: "Menunggu proyek", position: [2.1, .45, -.5] },
+  { id: "lila", name: "Lila", role: "Operations Coordinator", emoji: "🗂️", status: "idle", progress: 0, task: "Menunggu proyek", position: [4.2, .45, -.5] }
 ];
 
-const loungePositions: Record<string, [number, number, number]> = Object.fromEntries(
-  initialAgents.filter((a) => a.id !== "manager").map((a) => [a.id, a.position])
+const EMP_META: Record<string, { emoji: string; name: string }> = Object.fromEntries(
+  initialAgents.map((a) => [a.id, { emoji: a.emoji, name: a.name }])
 );
+const empName = (id: string) => EMP_META[id]?.name || id;
+const empEmoji = (id: string) => EMP_META[id]?.emoji || "🤖";
+const agentKnown = (id: string) => initialAgents.some((a) => a.id === id);
+
+const loungePositions: Record<string, [number, number, number]> = Object.fromEntries(
+  initialAgents.filter((a) => a.id !== "raka").map((a) => [a.id, a.position])
+);
+
+function mergeUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
+  if (!a) return b;
+  if (!b) return a;
+  const sum = (x?: number, y?: number) => (x || 0) + (y || 0);
+  return {
+    prompt_tokens: sum(a.prompt_tokens, b.prompt_tokens),
+    completion_tokens: sum(a.completion_tokens, b.completion_tokens),
+    total_tokens: sum(a.total_tokens, b.total_tokens)
+  };
+}
+
+function buildProjectFiles(items: Artifact[]): ProjectFile[] {
+  return items
+    .filter((a) => a.status === "done" && a.content.trim())
+    .map((a, i) => {
+      const trimmed = a.content.trim();
+      const isHtml = trimmed.includes("<html") || trimmed.startsWith("<");
+      const short = a.taskId.replace(/-/g, "").slice(0, 8) || `t${i + 1}`;
+      if (isHtml) return { path: `index-${short}.html`, content: a.content };
+      const slug = a.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || `artifact-${i + 1}`;
+      return { path: `${slug}-${short}.md`, content: a.content };
+    });
+}
 
 function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolean; onClick: () => void }) {
   const [group, setGroup] = useState<THREE.Group | null>(null);
   const avatarColor: Record<string, string> = {
-    manager: "#6c8cff",
-    designer: "#d16cff",
-    developer: "#4dd4a8",
-    writer: "#f0b45c",
-    qa: "#63b7ff"
+    raka: "#6c8cff",
+    sinta: "#d16cff",
+    andi: "#4dd4a8",
+    dina: "#f0b45c",
+    bima: "#63b7ff",
+    maya: "#e86c9a",
+    dimas: "#7dd87d",
+    nadia: "#ffd166",
+    fajar: "#9b8cff",
+    lila: "#6cd4e8"
   };
 
   const lounge = loungePositions[agent.id] || agent.position;
-  const target = agent.id === "manager" || agent.status === "working" || agent.status === "review"
+  const target = agent.id === "raka" || agent.status === "working" || agent.status === "review"
     ? agent.position
     : lounge;
 
@@ -99,7 +132,7 @@ function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolea
 
   const currentPosition = group?.position;
   const atDesk = currentPosition ? Math.hypot(currentPosition.x - agent.position[0], currentPosition.z - agent.position[2]) < .22 : false;
-  const walking = !atDesk && agent.id !== "manager";
+  const walking = !atDesk && agent.id !== "raka";
 
   return (
     <group ref={setGroup} position={agent.position} onClick={(e) => { e.stopPropagation(); onClick(); }}>
@@ -131,7 +164,7 @@ function Employee({ agent, selected, onClick }: { agent: Agent; selected: boolea
         name={agent.name}
         role={agent.role}
         active={agent.status === "working" || agent.status === "review"}
-        seated={atDesk && !walking && agent.id !== "manager"}
+        seated={atDesk && !walking && agent.id !== "raka"}
         talking={selected && (agent.status === "working" || agent.status === "review")}
       />
     </group>
@@ -157,105 +190,82 @@ function OfficeScene({ agents, selected, setSelected }: { agents: Agent[]; selec
 
 export default function Office() {
   const [agents, setAgents] = useState(initialAgents);
-  const [selected, setSelected] = useState("manager");
+  const [selected, setSelected] = useState("raka");
   const [prompt, setPrompt] = useState("");
   const [running, setRunning] = useState(false);
   const [artifact, setArtifact] = useState("");
   const [plan, setPlan] = useState<ManagerPlan | null>(null);
   const [error, setError] = useState("");
   const [sidebar, setSidebar] = useState<"history" | "tokens" | "ai" | "requests" | "delivery" | "workspace" | null>(null);
-  const [requests, setRequests] = useState<ResourceRequest[]>([]);
+  const [requests, setRequests] = useState<ApprovalRequestItem[]>([]);
   const [delivery, setDelivery] = useState<DeliveryConfig>({ repoUrl: "", branch: "main" });
   const [history, setHistory] = useState<ProjectHistory[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(null);
   const [aiModel, setAiModel] = useState("—");
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [modelConfig, setModelConfig] = useState<Record<string, string>>({ manager: "", ...Object.fromEntries(initialAgents.filter((a) => a.id !== "manager").map((a) => [a.id, ""])) });
-  const [modelLoading, setModelLoading] = useState(false);
-  const [modelError, setModelError] = useState("");
+  const [adminToken, setAdminToken] = useState<string>(() => {
+    try { return sessionStorage.getItem("kai-admin-token") || ""; } catch { return ""; }
+  });
   const [agentSearch, setAgentSearch] = useState("");
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "artifacts" | "preview" | "activity">("overview");
   const [retryingAgent, setRetryingAgent] = useState<string | null>(null);
-  const [pushState, setPushState] = useState<"idle" | "confirm" | "pushing" | "done" | "error">("idle");
+  const [pushState, setPushState] = useState<"idle" | "confirm" | "requesting" | "waiting" | "pushing" | "done" | "error">("idle");
+  const [pushApprovalId, setPushApprovalId] = useState<string | null>(null);
   const [pushMessage, setPushMessage] = useState("");
+  const [employees, setEmployees] = useState<EmployeeInfo[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+
+  const authHeaders = (): Record<string, string> => adminToken
+    ? { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` }
+    : { "Content-Type": "application/json" };
+
+  useEffect(() => {
+    try { sessionStorage.setItem("kai-admin-token", adminToken); } catch { /* sessionStorage unavailable */ }
+  }, [adminToken]);
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("ai-office-project");
+      const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
-      const data: SavedProject = JSON.parse(saved);
-      const savedModels = localStorage.getItem("ai-office-model-config");
-      if (savedModels) setModelConfig(JSON.parse(savedModels));
-      setPrompt(data.project || "");
-      setHistory(data.history || []);
-      setPlan(data.plan || null);
-      setArtifacts(data.artifacts || []);
-      setArtifact(data.artifact || "");
-      setAiModel(data.aiModel || "Atria-Dawn-Preview");
+      const data = JSON.parse(saved);
+      if (!data || typeof data !== "object") return;
+      setPrompt(typeof data.project === "string" ? data.project : "");
+      setHistory(Array.isArray(data.history) ? data.history : []);
+      setPlan(data.plan && typeof data.plan === "object" ? data.plan : null);
+      setArtifacts(Array.isArray(data.artifacts) ? data.artifacts : []);
+      setArtifact(typeof data.artifact === "string" ? data.artifact : "");
+      setAiModel(typeof data.aiModel === "string" ? data.aiModel : "—");
       setTokenUsage(data.tokenUsage || null);
-      setRequests(data.requests || []);
-      setDelivery(data.delivery || { repoUrl: "", branch: "main" });
-      if (data.artifacts?.length) { setWorkspaceOpen(true); setSidebar("workspace"); }
+      setRequests(Array.isArray(data.requests) ? data.requests : []);
+      setDelivery(data.delivery && typeof data.delivery === "object" ? data.delivery : { repoUrl: "", branch: "main" });
+      if (Array.isArray(data.artifacts) && data.artifacts.length) { setWorkspaceOpen(true); setSidebar("workspace"); }
     } catch {
-      localStorage.removeItem("ai-office-project");
+      try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     }
   }, []);
 
   useEffect(() => {
     if (!prompt.trim() && !history.length && !artifacts.length) return;
     const saved: SavedProject = { project: prompt.trim(), history, plan, artifacts, artifact, aiModel, tokenUsage, requests, delivery };
-    localStorage.setItem("ai-office-project", JSON.stringify(saved));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch { /* storage full or unavailable */ }
   }, [prompt, history, plan, artifacts, artifact, aiModel, tokenUsage, requests, delivery]);
 
   useEffect(() => {
     let cancelled = false;
-    const loadModels = async () => {
-      setModelLoading(true);
-      setModelError("");
-      try {
-        const response = await fetch("/api/models", { cache: "no-store" });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data?.error || `Gagal mengambil model (HTTP ${response.status}).`);
-        const models = Array.isArray(data?.models) ? data.models.filter((m: unknown): m is string => typeof m === "string" && m.trim()) : [];
-        if (cancelled) return;
-        setAvailableModels(models);
-        setModelConfig((current) => {
-          const next = { ...current };
-          const defaults: Record<string, string> = Object.fromEntries(initialAgents.map((a) => [a.id, "cx/gpt-5.5"]));
-          (Object.keys(defaults) as Array<keyof typeof defaults>).forEach((id) => {
-            if (!next[id] || !models.includes(next[id])) {
-              next[id] = models.includes(defaults[id]) ? defaults[id] : (models[0] || "");
-            }
-          });
-          localStorage.setItem("ai-office-model-config", JSON.stringify(next));
-          return next;
-        });
-      } catch (error) {
-        if (!cancelled) setModelError(error instanceof Error ? error.message : "Gagal mengambil daftar model.");
-      } finally {
-        if (!cancelled) setModelLoading(false);
-      }
-    };
-    loadModels();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const officeIds: Record<string, string> = { raka: "manager", sinta: "designer", andi: "frontend", dina: "writer", bima: "qa", maya: "analyst", dimas: "database", nadia: "strategist", fajar: "security", lila: "support" };
     const poll = async () => {
       try {
         const response = await fetch("/api/office/status", { cache: "no-store" });
         const data = await response.json();
         if (cancelled || !response.ok || !Array.isArray(data.events)) return;
         const latest = new Map<string, { status: string; eventType: string }>();
-        for (const event of data.events) if (officeIds[event.employeeId]) latest.set(officeIds[event.employeeId], event);
+        for (const event of data.events) {
+          if (event && typeof event.employeeId === "string") latest.set(event.employeeId, event);
+        }
         setAgents((current) => current.map((agent) => {
           const event = latest.get(agent.id);
           if (!event) return agent;
-          if (event.status === "working") return { ...agent, status: "working", progress: Math.max(agent.progress, 25), task: event.eventType === "chat_started" ? "Sedang menjawab chat AI nyata" : "Sedang bekerja dari event backend" };
+          if (event.status === "working") return { ...agent, status: "working", progress: Math.max(agent.progress, 25), task: "Sedang bekerja dari event backend" };
           if (event.status === "failed") return { ...agent, status: "review", task: "Perlu ditinjau: proses backend gagal" };
           if (event.status === "completed" && agent.status === "working") return { ...agent, status: "idle", progress: 100, task: "Respons AI selesai" };
           return agent;
@@ -267,178 +277,233 @@ export default function Office() {
     return () => { cancelled = true; window.clearInterval(timer); };
   }, []);
 
-  const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
-
-  const runProject = async () => {
-    if (!prompt.trim() || running) return;
-    setRunning(true); setError(""); setPlan(null); setArtifact(""); setArtifacts([]); setWorkspaceOpen(true); setSidebar("workspace"); setWorkspaceTab("overview");
-    setAgents((cur) => cur.map((x) => ({ ...x, status: x.id === "manager" ? "working" : "idle", progress: x.id === "manager" ? 10 : 0, task: x.id === "manager" ? "Raka sedang menganalisis proyek..." : "Menunggu Manager" })));
-    try {
-      const res = await fetch("/api/manager", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), model: modelConfig.manager || undefined }) });
-      const data = await readApiResponse(res);
-      setPlan(data.plan);
-      setTokenUsage(data.usage || null);
-      setAiModel(data.model || "Atria-Dawn-Preview");
-      setHistory((items) => [
-        { project: prompt.trim(), time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), status: "Selesai" },
-        ...items
-      ].slice(0, 12));
-      updateAgent("manager", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
-      const byAgent = new Map<string, ManagerPlan["tasks"][number]>(data.plan.tasks.map((t: ManagerPlan["tasks"][number]) => [t.agent, t]));
-      const parallelAgents = initialAgents.filter((a) => a.id !== "manager" && a.id !== "qa").map((a) => a.id);
-
-      
-      const runEmployee = async (id: string, context = "") => {
-        const task = byAgent.get(id);
-        if (!task) return;
-        setSelected(id);
-        updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 15, task: task.task });
-        setArtifacts((items) => [...items.filter((a) => a.agent !== id), { agent: id, title: task.deliverable, content: "", status: "working" }]);
-        try {
-          const agentRes = await fetch("/api/agent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ project: prompt.trim(), agent: id, task: task.task, deliverable: task.deliverable, context, model: modelConfig[id] || undefined })
-          });
-          const agentData = await readApiResponse(agentRes);
-          if (Array.isArray(agentData.requests) && agentData.requests.length) {
-            setRequests((items) => [...items, ...agentData.requests].slice(-20));
-          }
-          const files: ProjectFile[] | undefined = id === "frontend" && Array.isArray(agentData.files)
-            ? agentData.files.filter((f: any) => f?.path && typeof f.content === "string")
-            : undefined;
-          setArtifacts((items) => items.map((a) => a.agent === id
-            ? { ...a, content: agentData.artifact || "Agent tidak mengembalikan artifact.", files, model: agentData.model, usage: agentData.usage, status: "done" }
-            : a
-          ));
-          updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: id === "qa" ? "QA selesai" : "Artifact selesai" });
-          return { ...agentData, files };
-        } catch (agentError) {
-          const message = agentError instanceof Error ? agentError.message : "Agent gagal.";
-          setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: message, status: "error" } : a));
-          updateAgent(id, { progress: 100, status: "idle", task: `Gagal: ${message.slice(0, 140)}` });
-          return null;
+  useEffect(() => {
+    if (sidebar !== "ai" || !adminToken) return;
+    let cancelled = false;
+    setEmployeesLoading(true);
+    (async () => {
+      try {
+        const res = await fetch("/api/employees", { headers: authHeaders(), cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && Array.isArray(data.employees)) {
+          setEmployees(data.employees.map((e: { id: unknown; name: unknown; role: unknown; provider_name: unknown; model_id: unknown }) => ({
+            id: String(e.id), name: String(e.name), role: String(e.role || ""),
+            provider_name: e.provider_name != null ? String(e.provider_name) : null,
+            model_id: e.model_id != null ? String(e.model_id) : null
+          })));
         }
-      };
+      } catch { /* keep previous list */ }
+      finally { if (!cancelled) setEmployeesLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [sidebar, adminToken]);
 
-      const employeeResults: Array<any> = [];
-      const batchSize = 6;
-      for (let i = 0; i < parallelAgents.length; i += batchSize) {
-        const batch = parallelAgents.slice(i, i + batchSize);
-        const results = await Promise.all(batch.map((id) => runEmployee(id)));
-        employeeResults.push(...results);
-      }
-      const resultByAgent = new Map(parallelAgents.map((id, index) => [id, employeeResults[index]]));
-      const contextForQa = Array.from(resultByAgent.entries())
-        .filter(([, result]) => result)
-        .map(([id, result]) => `[${id}]\n${String(result.artifact || "").slice(0, 1800)}`)
-        .join("\n\n")
-        .slice(0, 12000);
-      await runEmployee("qa", contextForQa);
-
-      setWorkspaceTab("artifacts");
-      setArtifact(`PROJECT: ${prompt.trim()}
-
-MANAGER SUMMARY:
-${data.plan.summary}
-
-STATUS: AI EMPLOYEES COMPLETED THEIR WORK
-`);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Terjadi error.";
-      setError(message);
-      setAgents((cur) => cur.map((x) => ({ ...x, status: "idle", task: x.id === "manager" ? "Gagal menjalankan proyek" : "Menunggu Manager" })));
-    } finally { setRunning(false); }
-  };
+  const updateAgent = (id: string, patch: Partial<Agent>) => setAgents((cur) => cur.map((x) => x.id === id ? { ...x, ...patch } : x));
 
   async function readApiResponse(response: Response) {
     const text = await response.text();
-    let data: any = {};
+    let data: Record<string, unknown> = {};
     try {
       data = text ? JSON.parse(text) : {};
     } catch {
       throw new Error(text?.slice(0, 500) || `Server mengembalikan respons yang tidak valid (HTTP ${response.status}).`);
     }
-    if (!response.ok) throw new Error(data?.error || `Request gagal (HTTP ${response.status}).`);
+    if (!response.ok) throw new Error(typeof data?.error === "string" ? data.error : `Request gagal (HTTP ${response.status}).`);
     return data;
   }
 
-  const retryAgent = async (id: string) => {
-    const task = plan?.tasks.find((t) => t.agent === id);
-    const current = artifacts.find((a) => a.agent === id);
-    if (!task || retryingAgent) return;
-    setRetryingAgent(id);
-    setSelected(id);
-    updateAgent(id, { status: id === "qa" ? "review" : "working", progress: 15, task: "Memperbaiki pekerjaan yang gagal..." });
-    setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: "", status: "working" } : a));
-    try {
-      const repairTask = `${task.task}
+  const pushApprovalRequest = (from: string, taskId: string, ar: { actionType?: unknown; description?: unknown }) => {
+    const item: ApprovalRequestItem = {
+      id: `${taskId}-${Date.now()}`, taskId, from,
+      actionType: String(ar.actionType || "tindakan sensitif"),
+      description: String(ar.description || ""), status: "pending"
+    };
+    setRequests((items) => [...items, item].slice(-20));
+  };
 
-PERBAIKI ULANG PEKERJAAN SEBELUMNYA.
-Error sebelumnya: ${current?.content || "Tidak ada detail error."}
-Buat hasil baru yang lebih ringkas dan valid.`;
-      const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: prompt.trim(), agent: id, task: repairTask, deliverable: task.deliverable, model: modelConfig[id] || undefined }) });
+  const runProject = async () => {
+    if (!prompt.trim() || running) return;
+    if (!adminToken) { setError("Masukkan KAI_ADMIN_TOKEN dulu."); return; }
+    setRunning(true); setError(""); setPlan(null); setArtifact(""); setArtifacts([]); setRequests([]); setTokenUsage(null);
+    setWorkspaceOpen(true); setSidebar("workspace"); setWorkspaceTab("overview");
+    setAgents((cur) => cur.map((x) => ({ ...x, status: x.id === "raka" ? "working" : "idle", progress: x.id === "raka" ? 10 : 0, task: x.id === "raka" ? "Raka sedang menganalisis proyek..." : "Menunggu Manager" })));
+    const doneIdx = new Set<number>();
+    let completedCount = 0;
+    try {
+      const res = await fetch("/api/manager", { method: "POST", headers: authHeaders(), body: JSON.stringify({ project: prompt.trim() }) });
       const data = await readApiResponse(res);
-      if (Array.isArray(data.requests) && data.requests.length) setRequests((items) => [...items, ...data.requests].slice(-20));
-      const retryFiles: ProjectFile[] | undefined = id === "developer" && Array.isArray(data.files)
-        ? data.files.filter((f: any) => f?.path && typeof f.content === "string")
-        : undefined;
-      setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: data.artifact || "Agent tidak mengembalikan artifact.", files: retryFiles, model: data.model, usage: data.usage, status: "done" } : a));
-      updateAgent(id, { progress: 100, status: id === "qa" ? "review" : "idle", task: "Perbaikan selesai" });
+      const rawTasks: unknown[] = Array.isArray(data.tasks) ? data.tasks : [];
+      const tasks: PlanTask[] = rawTasks.map((t) => {
+        const rt = t as Record<string, unknown>;
+        return {
+          id: String(rt.id),
+          title: String(rt.title || "Tugas"),
+          agentId: String(rt.agentId || ""),
+          deliverable: String(rt.deliverable || ""),
+          priority: String(rt.priority || "normal"),
+          dependsOn: Array.isArray(rt.dependsOn)
+            ? (rt.dependsOn as unknown[]).filter((d): d is number => Number.isInteger(d) && (d as number) >= 0 && (d as number) < rawTasks.length)
+            : [],
+          status: String(rt.status || "queued")
+        };
+      });
+      const projectSummary = String((data.project as Record<string, unknown> | undefined)?.summary || data.summary || "");
+      setPlan({ summary: projectSummary, tasks });
+      setAiModel(typeof data.model === "string" ? data.model : "—");
+      setHistory((items) => [
+        { project: prompt.trim(), time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }), status: "Selesai" },
+        ...items
+      ].slice(0, 12));
+      updateAgent("raka", { status: "idle", progress: 100, task: "Rencana proyek selesai" });
+      const total = tasks.length;
+
+      const runTask = async (task: PlanTask, index: number, wave: number) => {
+        if (agentKnown(task.agentId)) setSelected(task.agentId);
+        updateAgent(task.agentId, { status: "working", progress: 30, task: `Gelombang ${wave} — ${task.title}` });
+        setArtifacts((items) => [...items.filter((a) => a.taskId !== task.id), { taskId: task.id, agentId: task.agentId, title: task.title, content: "", status: "working" }]);
+        try {
+          const taskRes = await fetch(`/api/tasks/${task.id}/run`, { method: "POST", headers: authHeaders(), body: "{}" });
+          const taskData = await readApiResponse(taskRes);
+          if (taskData.approvalRequested && typeof taskData.approvalRequested === "object") {
+            pushApprovalRequest(task.agentId, task.id, taskData.approvalRequested as { actionType?: unknown; description?: unknown });
+          }
+          setTokenUsage((cur) => mergeUsage(cur, (taskData.usage || null) as TokenUsage));
+          const content = typeof taskData.artifact === "string" && taskData.artifact.trim()
+            ? taskData.artifact
+            : "Agent tidak mengembalikan artifact.";
+          setArtifacts((items) => items.map((a) => a.taskId === task.id
+            ? { ...a, content, model: typeof taskData.model === "string" ? taskData.model : undefined, usage: (taskData.usage || null) as TokenUsage, status: "done" }
+            : a));
+          setPlan((cur) => cur ? { ...cur, tasks: cur.tasks.map((t) => t.id === task.id ? { ...t, status: String(taskData.status || "testing") } : t) } : cur);
+          completedCount++;
+          updateAgent(task.agentId, {
+            progress: Math.round((completedCount / Math.max(total, 1)) * 100),
+            status: "idle",
+            task: `Selesai: ${task.title.slice(0, 80)}${taskData.approvalRequested ? " (menunggu persetujuan)" : ""}`
+          });
+        } catch (taskError) {
+          const message = taskError instanceof Error ? taskError.message : "Agent gagal.";
+          setArtifacts((items) => items.map((a) => a.taskId === task.id ? { ...a, content: message, status: "error" } : a));
+          setPlan((cur) => cur ? { ...cur, tasks: cur.tasks.map((t) => t.id === task.id ? { ...t, status: "failed" } : t) } : cur);
+          updateAgent(task.agentId, { progress: 100, status: "idle", task: `Gagal: ${message.slice(0, 140)}` });
+        } finally {
+          doneIdx.add(index);
+        }
+      };
+
+      let wave = 0;
+      while (doneIdx.size < total) {
+        const runnable: Array<{ task: PlanTask; index: number }> = [];
+        tasks.forEach((t, i) => {
+          if (!doneIdx.has(i) && t.dependsOn.every((d) => doneIdx.has(d))) runnable.push({ task: t, index: i });
+        });
+        if (!runnable.length) {
+          setError(`Deadlock dependensi: ${total - doneIdx.size} tugas tidak dapat dijalankan karena dependensinya tidak selesai.`);
+          break;
+        }
+        wave++;
+        await Promise.all(runnable.slice(0, 4).map(({ task, index }) => runTask(task, index, wave)));
+      }
+
+      setWorkspaceTab("artifacts");
+      setArtifact(`PROJECT: ${prompt.trim()}
+
+MANAGER SUMMARY:
+${projectSummary}
+
+STATUS: ${doneIdx.size}/${total} tugas dieksekusi dalam ${wave} gelombang.
+`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Terjadi error.";
+      setError(message);
+      setAgents((cur) => cur.map((x) => ({ ...x, status: "idle", task: x.id === "raka" ? "Gagal menjalankan proyek" : "Menunggu Manager" })));
+    } finally { setRunning(false); }
+  };
+
+  const retryAgent = async (taskId: string) => {
+    const task = plan?.tasks.find((t) => t.id === taskId);
+    if (!task || retryingAgent || running) return;
+    if (!adminToken) { setError("Masukkan KAI_ADMIN_TOKEN dulu."); return; }
+    setRetryingAgent(taskId);
+    if (agentKnown(task.agentId)) setSelected(task.agentId);
+    updateAgent(task.agentId, { status: "working", progress: 30, task: `Mengulang: ${task.title}` });
+    setArtifacts((items) => items.map((a) => a.taskId === taskId ? { ...a, content: "", status: "working" } : a));
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/run`, { method: "POST", headers: authHeaders(), body: "{}" });
+      const data = await readApiResponse(res);
+      if (data.approvalRequested && typeof data.approvalRequested === "object") {
+        pushApprovalRequest(task.agentId, taskId, data.approvalRequested as { actionType?: unknown; description?: unknown });
+      }
+      setTokenUsage((cur) => mergeUsage(cur, (data.usage || null) as TokenUsage));
+      const content = typeof data.artifact === "string" && data.artifact.trim()
+        ? data.artifact
+        : "Agent tidak mengembalikan artifact.";
+      setArtifacts((items) => items.map((a) => a.taskId === taskId
+        ? { ...a, content, model: typeof data.model === "string" ? data.model : undefined, usage: (data.usage || null) as TokenUsage, status: "done" }
+        : a));
+      setPlan((cur) => cur ? { ...cur, tasks: cur.tasks.map((t) => t.id === taskId ? { ...t, status: String(data.status || "testing") } : t) } : cur);
+      updateAgent(task.agentId, { progress: 100, status: "idle", task: "Perbaikan selesai" });
       setWorkspaceTab("artifacts");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Agent gagal diperbaiki.";
-      setArtifacts((items) => items.map((a) => a.agent === id ? { ...a, content: message, status: "error" } : a));
-      updateAgent(id, { progress: 100, status: "idle", task: `Gagal: ${message.slice(0, 140)}` });
+      setArtifacts((items) => items.map((a) => a.taskId === taskId ? { ...a, content: message, status: "error" } : a));
+      updateAgent(task.agentId, { progress: 100, status: "idle", task: `Gagal: ${message.slice(0, 140)}` });
     } finally {
       setRetryingAgent(null);
     }
   };
 
-  const selectedAgent = agents.find((a) => a.id === selected)!;
-  const developerArtifact = artifacts.find((a) => a.agent === "frontend" && a.status === "done" && a.files?.length);
-  const projectFiles = developerArtifact?.files || [];
-  const [previewHtml, setPreviewHtml] = useState("");
+  const selectedAgent = agents.find((a) => a.id === selected) || agents[0];
+  const projectFiles = useMemo(() => buildProjectFiles(artifacts), [artifacts]);
+  const previewArtifact = artifacts.find((a) => a.status === "done" && (a.content.includes("<html") || a.content.trimStart().startsWith("<")));
 
-  useEffect(() => {
-    if (!projectFiles.length) { setPreviewHtml(""); return; }
-    const byPath = new Map(projectFiles.map((f) => [f.path.replace(/^\.\//, ""), f.content]));
-    const htmlFile = byPath.get("index.html") || projectFiles.find((f) => /\.html$/i.test(f.path))?.content;
-    if (!htmlFile) { setPreviewHtml(""); return; }
-    let html = htmlFile;
-    html = html.replace(/<link[^>]+href=["']([^"']+)["'][^>]*>/gi, (tag, href) => {
-      const css = byPath.get(String(href).replace(/^\.\//, ""));
-      return css != null ? `<style>
-${css}
-</style>` : tag;
-    });
-    html = html.replace(/<script[^>]+src=["']([^"']+)["'][^>]*><\/script>/gi, (tag, src) => {
-      const js = byPath.get(String(src).replace(/^\.\//, ""));
-      return js != null ? `<script>
-${js}
-</script>` : tag;
-    });
-    setPreviewHtml(html);
-  }, [developerArtifact]);
+  const requestPushApproval = async () => {
+    if (!adminToken) { setPushMessage("Masukkan KAI_ADMIN_TOKEN dulu."); setPushState("error"); return; }
+    if (!projectFiles.length || !delivery.repoUrl.trim()) { setPushState("error"); setPushMessage("Isi URL repository dulu."); return; }
+    setPushState("requesting");
+    setPushMessage("");
+    try {
+      const res = await fetch("/api/approvals", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          actionType: "github_push",
+          description: `Push ${projectFiles.length} file ke ${delivery.repoUrl.trim()} branch ${delivery.branch.trim() || "main"}`,
+          payload: { repoUrl: delivery.repoUrl.trim(), branch: delivery.branch.trim() || "main" }
+        })
+      });
+      const data = await readApiResponse(res);
+      const approval = data.approval as Record<string, unknown> | undefined;
+      setPushApprovalId(approval && typeof approval.id === "string" ? approval.id : null);
+      setPushState("waiting");
+    } catch (e) {
+      setPushState("error");
+      setPushMessage(e instanceof Error ? e.message : "Gagal membuat permintaan persetujuan.");
+    }
+  };
 
   const publishProject = async () => {
     if (!projectFiles.length || !delivery.repoUrl.trim() || pushState === "pushing") return;
+    if (!adminToken) { setPushMessage("Masukkan KAI_ADMIN_TOKEN dulu."); setPushState("error"); return; }
+    if (!pushApprovalId) { setPushState("error"); setPushMessage("Belum ada persetujuan. Minta persetujuan dulu, lalu setujui di /control."); return; }
     setPushState("pushing");
     setPushMessage("");
     try {
       const response = await fetch("/api/github/push", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify({
           repoUrl: delivery.repoUrl.trim(),
           branch: delivery.branch.trim() || "main",
-          message: `feat: publish AI Office project — ${prompt.trim().slice(0, 60)}`,
-          files: projectFiles
+          message: `feat: publish KAI project — ${prompt.trim().slice(0, 60)}`,
+          files: projectFiles,
+          approvalId: pushApprovalId
         })
       });
       const data = await readApiResponse(response);
       setPushState("done");
-      setPushMessage(`Berhasil push ${data.files?.length || projectFiles.length} file ke ${data.repo}/${data.branch}.`);
+      setPushApprovalId(null);
+      setPushMessage(`Berhasil push ${typeof data.files === "number" ? data.files : projectFiles.length} file ke ${String(data.repo || "?")}/${String(data.branch || "?")}.`);
       setHistory((items) => [{
         project: prompt.trim(),
         time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
@@ -480,7 +545,7 @@ ${js}
     const zip = join(...chunks, ...central, end);
     const blob = new Blob([zip], { type: "application/zip" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "ai-office-project.zip"; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = "kai-artifacts.zip"; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -500,37 +565,40 @@ ${js}
       <div className="token-card"><strong>{tokenUsage?.total_tokens ?? "—"}</strong><span>Total token terakhir</span></div>
       <div className="token-row"><span>Input</span><b>{tokenUsage?.prompt_tokens ?? "—"}</b></div>
       <div className="token-row"><span>Output</span><b>{tokenUsage?.completion_tokens ?? "—"}</b></div>
-      <div className="side-empty">Data berasal dari respons provider AI.</div>
+      <div className="side-empty">Data berasal dari respons provider AI, diagregasi per tugas.</div>
     </>
   ) : sidebar === "ai" ? (
     <>
       <div className="side-title">AI Model / 9Router</div>
-      <div className="side-empty">{modelLoading ? "Mengambil daftar model dari 9Router..." : availableModels.length ? `${availableModels.length} model tersedia dari 9Router.` : (modelError || "Belum ada model.")}</div>
-      {agents.map((a) => (
-        <label className="field-label" key={a.id}>{a.emoji} {a.name} · {a.role}
-          <select className="side-input" value={modelConfig[a.id] || ""} onChange={(e) => setModelConfig((x) => ({ ...x, [a.id]: e.target.value }))} disabled={!availableModels.length}>
-            <option value="">Pilih model</option>
-            {availableModels.map((model) => <option value={model} key={model}>{model}</option>)}
-          </select>
-        </label>
-      ))}
-      <button className="primary" onClick={() => localStorage.setItem("ai-office-model-config", JSON.stringify(modelConfig))}>Simpan konfigurasi semua model</button>
-      <div className="side-warning">Setiap karyawan dapat memakai model berbeda. Konfigurasi disimpan di browser.</div>
+      {!adminToken ? (
+        <div className="side-warning">Masukkan KAI_ADMIN_TOKEN di panel kanan untuk melihat konfigurasi provider & model tiap karyawan.</div>
+      ) : employeesLoading ? (
+        <div className="side-empty">Mengambil konfigurasi karyawan dari server...</div>
+      ) : employees.length ? (
+        <>
+          {employees.map((e) => (
+            <div className="side-item" key={e.id}>
+              <b>{empEmoji(e.id)} {e.name} · {e.role}</b>
+              <span>{e.provider_name || "—"}</span>
+              <small>{e.model_id || "belum dikonfigurasi"}</small>
+            </div>
+          ))}
+          <a className="side-action" href="/control" style={{ textDecoration: "none", display: "block", textAlign: "center" }}>Ubah di Provider & Agent Control →</a>
+        </>
+      ) : <div className="side-empty">Belum ada data karyawan dari server.</div>}
+      <div className="side-warning">Konfigurasi provider & model disimpan di database server, bukan di browser.</div>
     </>
   ) : sidebar === "requests" ? (
     <>
-      <div className="side-title">Permintaan AI ke Bos</div>
+      <div className="side-title">Permintaan Persetujuan AI</div>
       {requests.length ? requests.map((r) => (
         <div className="side-item" key={r.id}>
-          <b>🤖 {r.from}</b>
-          <span>{r.request}</span>
-          <small>{r.reason}</small>
-          <button className="side-action" onClick={() => setRequests(items => items.map(x => x.id === r.id ? { ...x, status: "provided" } : x))}>
-            {r.status === "provided" ? "✓ Sudah diberikan" : "Tandai sudah diberikan"}
-          </button>
+          <b>🤖 {empName(r.from)} meminta persetujuan</b>
+          <span>{r.actionType}</span>
+          <small>{r.description}</small>
+          <a className="side-action" href="/control" style={{ textDecoration: "none", display: "block", textAlign: "center" }}>Setujui di /control →</a>
         </div>
-      )) : <div className="side-empty">Belum ada permintaan resource. Jika AI membutuhkan API key, repo, file, domain, atau konfigurasi, permintaannya akan muncul di sini.</div>}
-      <div className="side-warning">Jangan masukkan secret/API key langsung ke chat. Simpan credential sebagai environment variable/secret di server.</div>
+      )) : <div className="side-empty">Belum ada permintaan persetujuan. Jika karyawan AI meminta tindakan sensitif, permintaannya akan muncul di sini.</div>}
     </>
   ) : sidebar === "workspace" ? (
     <>
@@ -542,10 +610,18 @@ ${js}
         <button className={workspaceTab === "activity" ? "active" : ""} onClick={() => setWorkspaceTab("activity")}>Activity</button>
       </nav>
       <div className="workspace-body">
-        {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>AI COMPANY CONTROL CENTER</span><strong>{running ? "Team is working..." : artifacts.length ? "Work completed" : "Ready to start"}</strong><p>Raka mengorkestrasi {agents.length - 1} spesialis. Pekerjaan dijalankan dalam batch paralel, hasil masuk ke Workspace, lalu bisa Preview, ZIP, atau Push ke GitHub.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "manager").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
-        {workspaceTab === "artifacts" && <div className="artifact-grid">{artifacts.map(a => <article className="result-card" key={a.agent}><div className="result-top"><b>{a.agent.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3>{a.agent === "frontend" && a.files?.length ? <><div className="workspace-actions"><button className="primary" onClick={() => setWorkspaceTab("preview")}>▶ Preview Project</button><button className="side-action" onClick={downloadProjectZip}>📦 Download ZIP</button><button className="primary" disabled={!delivery.repoUrl.trim() || pushState === "pushing"} onClick={() => setPushState("confirm")}>🚀 Push ke GitHub</button></div><div className="file-list">{a.files.map((f) => <div className="file-chip" key={f.path}>📄 {f.path}</div>)}</div></> : null}<pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.agent || running} onClick={() => retryAgent(a.agent)}>{retryingAgent === a.agent ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}{!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}</div>}
-        {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI PROJECT PREVIEW</span><span>{previewHtml ? "READY" : "NO BUILD"}</span></div>{previewHtml ? <iframe title="AI project preview" sandbox="allow-scripts" srcDoc={previewHtml} style={{width:"100%",minHeight:520,border:0,borderRadius:14,background:"#fff"}} /> : <div className="side-empty">Belum ada index.html dari Andi. Jalankan project sampai Frontend Developer selesai menghasilkan file.</div>}</div>}
-        {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.agent}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agent.toUpperCase()} — {a.title}</div>)}</div>}
+        {workspaceTab === "overview" && <div className="workspace-grid"><div className="workspace-card hero"><span>AI COMPANY CONTROL CENTER</span><strong>{running ? "Team is working..." : artifacts.length ? "Work completed" : "Ready to start"}</strong><p>Raka mengorkestrasi {agents.length - 1} spesialis. Pekerjaan dijalankan dalam gelombang dependensi (maks 4 paralel), hasil masuk ke Workspace, lalu bisa Preview, ZIP, atau Push ke GitHub.</p><button className="primary" onClick={() => setWorkspaceTab("artifacts")}>Lihat Hasil Pekerjaan →</button></div>{agents.filter(a => a.id !== "raka").map(a => <div className="workspace-card" key={a.id}><b>{a.emoji} {a.name}</b><span>{a.role}</span><p>{a.task}</p><div className="mini-progress"><i style={{width: `${a.progress}%`}} /></div></div>)}</div>}
+        {workspaceTab === "artifacts" && <div className="artifact-grid">
+          {projectFiles.length > 0 && <div className="workspace-actions" style={{ gridColumn: "1 / -1" }}>
+            <button className="primary" onClick={() => setWorkspaceTab("preview")}>▶ Preview Project</button>
+            <button className="side-action" onClick={downloadProjectZip}>📦 Unduh artefak (.zip)</button>
+            <button className="primary" disabled={!delivery.repoUrl.trim() || pushState === "pushing"} onClick={() => { setSidebar("delivery"); setPushState("confirm"); }}>🚀 Push ke GitHub</button>
+          </div>}
+          {artifacts.map(a => <article className="result-card" key={a.taskId}><div className="result-top"><b>{a.agentId.toUpperCase()}</b><span className={a.status}>{a.status}</span></div><h3>{a.title}</h3>{a.model && <div className="muted" style={{ fontSize: 11 }}>Model: {a.model}</div>}<pre>{a.content || "Sedang dikerjakan oleh AI..."}</pre>{a.status === "error" && <button className="primary repair-btn" disabled={retryingAgent === a.taskId || running} onClick={() => retryAgent(a.taskId)}>{retryingAgent === a.taskId ? "Memperbaiki..." : "↻ Perbaiki Ulang"}</button>}</article>)}
+          {!artifacts.length && <div className="side-empty">Belum ada artifact.</div>}
+        </div>}
+        {workspaceTab === "preview" && <div className="preview-card"><div className="preview-bar"><span>AI PROJECT PREVIEW</span><span>{previewArtifact ? "READY" : "NO BUILD"}</span></div>{previewArtifact ? <iframe title="AI project preview" sandbox="allow-scripts" srcDoc={previewArtifact.content} style={{width:"100%",minHeight:520,border:0,borderRadius:14,background:"#fff"}} /> : <div className="side-empty">Belum ada artifact HTML. Jalankan project sampai ada karyawan yang menghasilkan halaman web.</div>}</div>}
+        {workspaceTab === "activity" && <div className="activity-list"><div>🧠 Raka membuat project plan</div>{artifacts.map(a => <div key={a.taskId}>{a.status === "done" ? "✅" : a.status === "error" ? "❌" : "⏳"} {a.agentId.toUpperCase()} — {a.title}</div>)}</div>}
       </div>
     </>
   ) : sidebar === "delivery" ? (
@@ -557,11 +633,13 @@ ${js}
       <input className="side-input" value={delivery.branch} onChange={e => setDelivery(d => ({ ...d, branch: e.target.value }))} placeholder="main" />
       <div className="side-item">
         <b>🚀 Publish dengan persetujuan</b>
-        <span>Andi menghasilkan file → kamu cek Preview → kamu klik Push → aplikasi meminta konfirmasi → baru commit dibuat di GitHub.</span>
+        <span>Artefak dikemas → kamu klik Push → permintaan persetujuan dibuat → kamu setujui di /control → baru commit dibuat di GitHub.</span>
       </div>
       {projectFiles.length > 0 && <div className="side-item"><b>📄 {projectFiles.length} file siap dikirim</b><span>{projectFiles.slice(0, 5).map(f => f.path).join(" · ")}{projectFiles.length > 5 ? " · ..." : ""}</span></div>}
       <div className="side-warning">GitHub token hanya boleh disimpan sebagai GITHUB_TOKEN di environment server. Jangan tempel token di kolom Repository.</div>
-      {pushState === "confirm" && <div className="confirm-card"><b>Push project ke GitHub?</b><span>{projectFiles.length} file akan ditulis ke <strong>{delivery.repoUrl || "repository"}</strong> branch <strong>{delivery.branch || "main"}</strong>.</span><div className="workspace-actions"><button className="primary" onClick={publishProject}>Ya, Push Sekarang</button><button className="side-action" onClick={() => setPushState("idle")}>Batal</button></div></div>}
+      {pushState === "confirm" && <div className="confirm-card"><b>Push project ke GitHub?</b><span>{projectFiles.length} file akan ditulis ke <strong>{delivery.repoUrl || "repository"}</strong> branch <strong>{delivery.branch || "main"}</strong>. Langkah pertama: buat permintaan persetujuan.</span><div className="workspace-actions"><button className="primary" onClick={requestPushApproval}>Ya, Minta Persetujuan</button><button className="side-action" onClick={() => setPushState("idle")}>Batal</button></div></div>}
+      {pushState === "requesting" && <div className="side-item"><b>⏳ Membuat permintaan persetujuan...</b></div>}
+      {pushState === "waiting" && <div className="side-item"><b>⏳ Menunggu persetujuan di /control</b><span>Permintaan push sudah dibuat. Setujui di <a href="/control">/control</a>, lalu klik Push di bawah.</span><div className="workspace-actions"><button className="primary" onClick={publishProject}>Sudah disetujui — Push Sekarang</button><button className="side-action" onClick={() => { setPushState("idle"); setPushApprovalId(null); }}>Batal</button></div></div>}
       {pushState === "pushing" && <div className="side-item"><b>⏳ Publishing...</b><span>Commit sedang dibuat.</span></div>}
       {pushState === "done" && <div className="side-item"><b>✅ GitHub berhasil</b><span>{pushMessage}</span></div>}
       {pushState === "error" && <div className="error-box">{pushMessage}</div>}
@@ -588,12 +666,16 @@ ${js}
       </section>
       <aside className="panel">
         <h1>AI Office</h1>
-        <div className="muted">Masukkan proyek. Raka membagi pekerjaan ke tim AI dan menjalankannya dalam batch paralel.</div>
+        <div className="muted">Masukkan proyek dan KAI_ADMIN_TOKEN. Raka membagi pekerjaan ke 10 karyawan AI dan menjalankannya dalam gelombang dependensi.</div>
+        <label className="field-label">KAI_ADMIN_TOKEN
+          <input type="password" className="side-input" value={adminToken} onChange={(e) => setAdminToken(e.target.value)} placeholder="Tempel token admin backend" autoComplete="off" />
+        </label>
+        {!adminToken && <div className="side-warning">Token admin wajib untuk menjalankan project & push GitHub. Token hanya disimpan di sessionStorage, bukan localStorage.</div>}
         <div className="project">
           <div style={{ fontWeight: 700, fontSize: 13 }}>New project · AI Team Orchestrator</div><div className="quick-prompts"><button onClick={() => setPrompt("Buat landing page bisnis modern lengkap dengan responsive UI, SEO, form kontak, dan dokumentasi.")}>🌐 Website</button><button onClick={() => setPrompt("Buat aplikasi dashboard SaaS dengan auth, database, billing, admin panel, dan API.")}>📊 SaaS</button><button onClick={() => setPrompt("Buat aplikasi mobile dengan API, autentikasi, offline state, dan dokumentasi.")}>📱 Mobile</button></div>
           <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Contoh: Buat landing page Nexora Design untuk UMKM Indonesia..." />
           <button className="primary" onClick={runProject} disabled={!prompt.trim() || running}>{running ? "Raka sedang bekerja..." : "START PROJECT"}</button>
-          {!running && projectFiles.length > 0 && <div className="project-ready"><b>✅ Project file siap</b><span>{projectFiles.length} file dari Andi. Buka Workspace untuk Preview, ZIP, atau Push ke GitHub.</span><button className="side-action" onClick={() => { setSidebar("workspace"); setWorkspaceOpen(true); setWorkspaceTab("preview"); }}>Buka Preview →</button></div>}
+          {!running && projectFiles.length > 0 && <div className="project-ready"><b>✅ Project file siap</b><span>{projectFiles.length} file dari artefak AI. Buka Workspace untuk Preview, ZIP, atau Push ke GitHub.</span><button className="side-action" onClick={() => { setSidebar("workspace"); setWorkspaceOpen(true); setWorkspaceTab("preview"); }}>Buka Preview →</button></div>}
           {error && <div className="error-box">{error}</div>}
         </div>
         <div className="team-stats"><div><b>{agents.length}</b><span>AI Employees</span></div><div><b>{agents.filter(a => a.status === "working" || a.status === "review").length}</b><span>Working</span></div><div><b>{artifacts.filter(a => a.status === "done").length}</b><span>Artifacts</span></div></div>
@@ -604,7 +686,7 @@ ${js}
             <div className="task">{a.task}</div><div className="progress"><span style={{ width: `${a.progress}%` }} /></div>
           </div>
         ))}</div>
-        {plan && <div className="artifact"><div style={{ fontWeight: 700, fontSize: 13 }}>🧠 Raka — Manager Plan</div><div className="muted" style={{ marginTop: 6 }}>{plan.summary}</div>{plan.tasks.map((t) => <div key={t.agent} style={{ marginTop: 10, fontSize: 12 }}><b>{t.agent.toUpperCase()}</b><br />{t.task}<br /><span className="muted">Deliverable: {t.deliverable}</span></div>)}</div>}
+        {plan && <div className="artifact"><div style={{ fontWeight: 700, fontSize: 13 }}>🧠 Raka — Manager Plan</div><div className="muted" style={{ marginTop: 6 }}>{plan.summary}</div>{plan.tasks.map((t) => <div key={t.id} style={{ marginTop: 10, fontSize: 12 }}><b>{t.agentId.toUpperCase()}</b> <span className="badge">{t.status}</span><br />{t.title}<br /><span className="muted">Deliverable: {t.deliverable}</span></div>)}</div>}
         <div className="artifact"><div style={{ fontWeight: 700, fontSize: 13 }}>Selected agent</div><div className="muted" style={{ marginTop: 6 }}>{selectedAgent.name} · {selectedAgent.role} · {selectedAgent.task}</div></div>
         {artifact && <div className="artifact"><div style={{ fontWeight: 700, fontSize: 13 }}>📦 Project artifact</div><pre>{artifact}</pre></div>}
       </aside>

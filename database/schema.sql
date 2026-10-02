@@ -100,7 +100,17 @@ CREATE TABLE IF NOT EXISTS usage_records (
  duration_ms INTEGER,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE TABLE IF NOT EXISTS office_events (\n id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n employee_id TEXT REFERENCES employees(id) ON DELETE SET NULL,\n event_type TEXT NOT NULL,\n status TEXT NOT NULL DEFAULT 'info',\n message TEXT NOT NULL,\n metadata JSONB NOT NULL DEFAULT '{}'::jsonb,\n created_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\nCREATE INDEX IF NOT EXISTS office_events_created_at_idx ON office_events(created_at DESC);\nCREATE TABLE IF NOT EXISTS approval_requests (
+CREATE TABLE IF NOT EXISTS office_events (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ employee_id TEXT REFERENCES employees(id) ON DELETE SET NULL,
+ event_type TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'info',
+ message TEXT NOT NULL,
+ metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS office_events_created_at_idx ON office_events(created_at DESC);
+CREATE TABLE IF NOT EXISTS approval_requests (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
  action_type TEXT NOT NULL,

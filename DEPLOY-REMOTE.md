@@ -35,4 +35,4 @@ For development on a PC use PostgreSQL and Node.js, configure `.env.local`, appl
 - This compose stack does not include TLS proxy, backups, VPN, or automatic OS updates; configure them before production use.
 - The current admin Bearer token is a prototype access gate, not a full user login/session system. Do not expose this deployment publicly until proper session auth, CSRF protections, rate limiting, and security review are implemented.
 - Remote agent work can only call a 9Router endpoint reachable from the VPS. If the provider token/model is only configured on your PC's 9Router instance, it will not work after the PC is off.
-- Schema is applied automatically only when PostgreSQL volume is new. For an existing volume, apply new schema changes manually with psql.
+- Schema dasar (`database/schema.sql`) diterapkan otomatis hanya saat volume PostgreSQL baru. Migrasi berikutnya (`database/migrations/*.sql`) diterapkan otomatis oleh aplikasi saat start (aditif, tidak pernah menghapus data).

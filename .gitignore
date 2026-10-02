@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Environment & secrets
+.env*.local
+.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# Workspace runtime (isolated tool workspace; user data, not source)
+workspace/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Lockfile intentionally not committed (CI installs without it)
+package-lock.json
+tsconfig.tsbuildinfo
