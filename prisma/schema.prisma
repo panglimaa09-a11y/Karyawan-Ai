@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model Provider {
+  id String @id @default(cuid())
+  name String
+  baseUrl String
+  apiFormat String @default("openai-chat")
+  encryptedKey String
+  keyIv String
+  keyTag String
+  defaultModel String?
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  models ProviderModel[]
+  employees Employee[]
+  messages Message[]
+  @@index([enabled])
+}
+model ProviderModel {
+  id String @id @default(cuid())
+  providerId String
+  modelId String
+  displayName String?
+  available Boolean @default(true)
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  @@unique([providerId, modelId])
+}
+model Employee {
+  id String @id
+  name String
+  role String
+  personality String @default("")
+  systemPrompt String @default("")
+  providerId String?
+  modelId String?
+  enabled Boolean @default(true)
+  provider Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  messages Message[]
+  tasks Task[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model Conversation {
+  id String @id @default(cuid())
+  title String @default("Percakapan baru")
+  kind String @default("direct")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages Message[]
+}
+model Message {
+  id String @id @default(cuid())
+  conversationId String
+  employeeId String?
+  providerId String?
+  role String
+  content String @db.Text
+  modelId String?
+  promptTokens Int?
+  completionTokens Int?
+  createdAt DateTime @default(now())
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  provider Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  @@index([conversationId, createdAt])
+}
+model Task {
+  id String @id @default(cuid())
+  title String
+  description String @db.Text
+  status String @default("queued")
+  employeeId String?
+  conversationId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  @@index([status, createdAt])
+}
+model Meeting {
+  id String @id @default(cuid())
+  title String
+  agenda String @db.Text
+  status String @default("planned")
+  participants Json
+  minutes String? @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model AuditLog {
+  id String @id @default(cuid())
+  action String
+  entityType String
+  entityId String?
+  detail Json?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}

@@ -1,2 +1,2 @@
 import Office from "@/components/Office";
-export default function Home(){return <Office/>;}
+export default function Home(){return <><Office/><nav style={{position:"fixed",zIndex:100,left:220,bottom:20,display:"flex",gap:8,flexWrap:"wrap"}}><a href="/providers" style={{background:"#c7dcff",color:"#101722",padding:"10px 13px",borderRadius:9,textDecoration:"none",fontWeight:700,fontSize:12}}>⚙ Provider Manager</a><a href="/chat" style={{background:"#c7dcff",color:"#101722",padding:"10px 13px",borderRadius:9,textDecoration:"none",fontWeight:700,fontSize:12}}>✉ AI Agent Chat</a></nav></>}
