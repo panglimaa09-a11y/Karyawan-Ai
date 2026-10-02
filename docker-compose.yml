@@ -17,7 +17,6 @@ services:
     networks: [kai-private]
   app:
     build: .
-    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
