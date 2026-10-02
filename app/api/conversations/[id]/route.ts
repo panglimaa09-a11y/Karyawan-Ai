@@ -1,0 +1,3 @@
+import {NextResponse} from "next/server";
+import {prisma} from "@/lib/prisma";
+export async function GET(_req:Request,{params}:{params:Promise<{id:string}>}){try{const {id}=await params;const conversation=await prisma.conversation.findUnique({where:{id},include:{messages:{orderBy:{createdAt:"asc"},include:{employee:{select:{id:true,name:true}},provider:{select:{id:true,name:true}}}}}});if(!conversation)return NextResponse.json({error:"Percakapan tidak ditemukan."},{status:404});return NextResponse.json({conversation});}catch{return NextResponse.json({error:"Gagal memuat percakapan."},{status:500});}}
